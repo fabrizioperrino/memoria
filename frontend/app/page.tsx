@@ -23,7 +23,6 @@ import {
   Clock,
   Target,
   TrendingUp,
-  Trophy,
   Brain,
   Key,
   RotateCcw,
@@ -34,7 +33,12 @@ import {
   Link2,
   Link2Off,
   AlignLeft,
+  Flame,
+  AlertCircle,
+  Loader2,
+  Globe,
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 // ── Sparkline chart ────────────────────────────────────────────────────────────
 function ScoreSparkline({ data }: { data: QuizChartPoint[] }) {
@@ -106,12 +110,14 @@ function scoreBarColor(pct: number) {
 
 // ── File type icon ─────────────────────────────────────────────────────────────
 function DocIcon({ type }: { type: string | null }) {
-  if (type === "text") return <AlignLeft className="text-gray-400" size={18} />;
+  if (type === "text")  return <AlignLeft className="text-gray-400" size={18} />;
+  if (type === "url")   return <Globe className="text-gray-400" size={18} />;
   return <FileText className="text-gray-400" size={18} />;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [stats,     setStats]     = useState<StatsSummary | null>(null);
   const [loading,   setLoading]   = useState(true);
@@ -130,6 +136,26 @@ export default function Dashboard() {
       toast.error("No se pudo conectar con la API");
     }).finally(() => setLoading(false));
   }, []);
+
+  // Polling para documentos en procesamiento
+  useEffect(() => {
+    const hasProcessing = documents.some((d) => d.status === "processing");
+    if (!hasProcessing) return;
+    const interval = setInterval(async () => {
+      const fresh = await listDocuments().catch(() => null);
+      if (!fresh) return;
+      setDocuments((prev) => {
+        fresh.forEach((fd) => {
+          const old = prev.find((d) => d.id === fd.id);
+          if (old?.status === "processing" && fd.status === "ready") {
+            toast.success(`"${fd.title}" ya está listo 🎉`);
+          }
+        });
+        return fresh;
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [documents]);
 
   // ── Materias únicas ────────────────────────────────────────────────────────
   const subjects = useMemo(() => {
@@ -191,8 +217,17 @@ export default function Dashboard() {
         {/* ── Hero ── */}
         <div className="flex items-end justify-between">
           <div>
-            <h1 className="text-4xl font-bold mb-1">Dashboard</h1>
-            <p className="text-gray-500">Tu progreso de estudio en un vistazo.</p>
+            <h1 className="text-4xl font-bold mb-1">
+              Hola, {(user?.user_metadata?.full_name as string)?.split(" ")[0] || user?.email?.split("@")[0]} 👋
+            </h1>
+            <div className="flex items-center gap-3">
+              <p className="text-gray-500">Tu progreso de estudio en un vistazo.</p>
+              {stats && stats.study_streak > 0 && (
+                <span className="flex items-center gap-1 text-xs font-semibold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20">
+                  <Flame size={11} /> {stats.study_streak} día{stats.study_streak !== 1 ? "s" : ""} seguidos
+                </span>
+              )}
+            </div>
           </div>
           <Link
             href="/upload"
@@ -399,13 +434,30 @@ export default function Dashboard() {
                       key={doc.id}
                       className="group rounded-2xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/10 transition-all p-5 flex items-center gap-4"
                     >
-                      <div className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
-                        <DocIcon type={doc.file_type} />
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                        doc.status === "error" ? "bg-red-500/10" : "bg-white/5"
+                      }`}>
+                        {doc.status === "processing"
+                          ? <Loader2 className="text-violet-400 animate-spin" size={18} />
+                          : doc.status === "error"
+                            ? <AlertCircle className="text-red-400" size={18} />
+                            : <DocIcon type={doc.file_type} />
+                        }
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium truncate">{doc.title}</p>
+                          {doc.status === "processing" && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20 shrink-0">
+                              Procesando...
+                            </span>
+                          )}
+                          {doc.status === "error" && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/20 shrink-0">
+                              Error al procesar
+                            </span>
+                          )}
                           {doc.subject && (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20 shrink-0">
                               {doc.subject}

@@ -2,13 +2,13 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { uploadDocument, uploadText } from "@/lib/api";
+import { uploadDocument, uploadText, importFromUrl } from "@/lib/api";
 import { toast, Toaster } from "sonner";
-import { Upload, FileText, Image, X, Sparkles, CheckCircle2, AlignLeft, Paperclip } from "lucide-react";
+import { Upload, FileText, Image, X, Sparkles, CheckCircle2, AlignLeft, Paperclip, Globe, Link } from "lucide-react";
 
 const ACCEPTED = ".pdf,image/jpeg,image/png,image/webp";
 
-type Tab = "file" | "text";
+type Tab = "file" | "text" | "url";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -22,6 +22,9 @@ export default function UploadPage() {
   // ── Estado modo texto ────────────────────────────────────────────────────
   const [textTitle,   setTextTitle]   = useState("");
   const [textContent, setTextContent] = useState("");
+
+  // ── Estado modo URL ───────────────────────────────────────────────────────
+  const [urlValue, setUrlValue] = useState("");
 
   // ── Compartido ───────────────────────────────────────────────────────────
   const [subject,   setSubject]   = useState("");
@@ -43,6 +46,7 @@ export default function UploadPage() {
   const handleUpload = async () => {
     if (tab === "file" && !file) return;
     if (tab === "text" && (!textTitle.trim() || !textContent.trim())) return;
+    if (tab === "url"  && !urlValue.trim()) return;
 
     setUploading(true);
     setSlowWarning(false);
@@ -54,8 +58,10 @@ export default function UploadPage() {
       let doc;
       if (tab === "file") {
         doc = await uploadDocument(file!, subject);
-      } else {
+      } else if (tab === "text") {
         doc = await uploadText(textTitle.trim(), textContent.trim(), subject);
+      } else {
+        doc = await importFromUrl(urlValue.trim(), subject);
       }
       clearTimeout(slowTimer);
       setStep("done");
@@ -73,9 +79,11 @@ export default function UploadPage() {
   };
 
   const isPdf = file?.type === "application/pdf";
-  const canSubmit = tab === "file"
-    ? !!file && !uploading
-    : !!textTitle.trim() && !!textContent.trim() && !uploading;
+  const canSubmit = !uploading && (
+    (tab === "file" && !!file) ||
+    (tab === "text" && !!textTitle.trim() && !!textContent.trim()) ||
+    (tab === "url"  && !!urlValue.trim())
+  );
 
   return (
     <main className="min-h-screen bg-[#0f0f13] flex items-center justify-center p-6">
@@ -93,8 +101,9 @@ export default function UploadPage() {
         {/* Tab toggle */}
         <div className="flex rounded-xl bg-white/[0.04] p-1 mb-6 gap-1">
           {([
-            { id: "file", label: "Archivo", icon: Paperclip },
-            { id: "text", label: "Pegar texto", icon: AlignLeft },
+            { id: "file", label: "Archivo",     icon: Paperclip },
+            { id: "text", label: "Pegar texto", icon: AlignLeft  },
+            { id: "url",  label: "Desde URL",   icon: Globe       },
           ] as { id: Tab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -192,6 +201,47 @@ export default function UploadPage() {
           </div>
         )}
 
+        {/* ── Modo URL ── */}
+        {tab === "url" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0">
+                  <Globe className="text-violet-400" size={18} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-white mb-0.5">Importar desde URL</p>
+                  <p className="text-xs text-gray-500">
+                    Pegá el link de un artículo, Wikipedia, apunte online u otra página. Extraemos el texto y generamos el material de estudio.
+                  </p>
+                </div>
+              </div>
+              <div className="relative">
+                <Link size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
+                <input
+                  type="url"
+                  value={urlValue}
+                  onChange={(e) => setUrlValue(e.target.value)}
+                  placeholder="https://es.wikipedia.org/wiki/..."
+                  disabled={uploading}
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm placeholder-gray-600 focus:outline-none focus:border-violet-500/60 focus:bg-white/[0.07] transition-all disabled:opacity-50"
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  "es.wikipedia.org",
+                  "Artículo web",
+                  "Apunte online",
+                ].map((eg) => (
+                  <span key={eg} className="text-[11px] px-2 py-1 rounded-full bg-white/5 text-gray-600 border border-white/5">
+                    {eg}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Materia (compartido) ── */}
         <div className="mt-4">
           <label className="block text-xs font-medium text-gray-400 mb-1.5">Materia <span className="text-gray-600">(opcional)</span></label>
@@ -218,7 +268,7 @@ export default function UploadPage() {
           <div className="mt-6 rounded-2xl border border-white/5 bg-white/[0.03] p-5">
             <div className="flex flex-col gap-3">
               {[
-                { id: "uploading",  label: tab === "file" ? "Subiendo archivo..." : "Enviando texto..." },
+                { id: "uploading",  label: tab === "file" ? "Subiendo archivo..." : tab === "url" ? "Accediendo a la URL..." : "Enviando texto..." },
                 { id: "processing", label: "Groq está analizando el contenido..." },
                 { id: "done",       label: "¡Generando material de estudio!" },
               ].map((s) => {

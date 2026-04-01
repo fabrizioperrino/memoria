@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import documents, review, chat, quiz, stats
+from api.routers import documents, review, chat, quiz, stats, import_url
 from settings.config import settings
 
 app = FastAPI(
@@ -19,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(documents.router)
+app.include_router(import_url.router)
 app.include_router(review.router)
 app.include_router(chat.router)
 app.include_router(quiz.router)

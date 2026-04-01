@@ -8,14 +8,14 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 @router.get("/summary")
 async def get_stats_summary(current_user=Depends(get_current_user)):
     """Devuelve estadísticas globales del usuario autenticado."""
-    from datetime import datetime, timezone
+    from datetime import datetime, timezone, timedelta
 
     uid = current_user.id
 
     # ── Documentos del usuario ────────────────────────────────────────────────
     docs_resp = (
         supabase.table("documents")
-        .select("id, flashcards, exam_questions, key_concepts")
+        .select("id, flashcards, exam_questions, key_concepts, created_at, subject")
         .eq("user_id", uid)
         .execute()
     )
@@ -82,6 +82,43 @@ async def get_stats_summary(current_user=Depends(get_current_user)):
             "created_at": r["created_at"],
         })
 
+    # ── Streak de estudio ─────────────────────────────────────────────────────
+    # Reunir todas las fechas con actividad (quizzes + uploads)
+    activity_dates: set = set()
+    for r in quiz_results:
+        try:
+            d = datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")).date()
+            activity_dates.add(d)
+        except Exception:
+            pass
+    for doc in docs:
+        try:
+            d = datetime.fromisoformat(doc["created_at"].replace("Z", "+00:00")).date()
+            activity_dates.add(d)
+        except Exception:
+            pass
+
+    today = datetime.now(timezone.utc).date()
+    study_streak = 0
+    check = today
+    while check in activity_dates:
+        study_streak += 1
+        check -= timedelta(days=1)
+    # Si hoy no hubo actividad, verificar desde ayer
+    if study_streak == 0:
+        check = today - timedelta(days=1)
+        while check in activity_dates:
+            study_streak += 1
+            check -= timedelta(days=1)
+
+    # ── Materias con más actividad ────────────────────────────────────────────
+    subjects_count: dict = {}
+    for doc in docs:
+        subj = doc.get("subject")
+        if subj:
+            subjects_count[subj] = subjects_count.get(subj, 0) + 1
+    top_subjects = sorted(subjects_count.items(), key=lambda x: x[1], reverse=True)[:5]
+
     return {
         "total_documents":     total_documents,
         "total_flashcards":    total_flashcards,
@@ -93,4 +130,6 @@ async def get_stats_summary(current_user=Depends(get_current_user)):
         "best_quiz_score":     best_quiz_score,
         "recent_quiz_chart":   recent_quiz,
         "recent_activity":     recent_activity,
+        "study_streak":        study_streak,
+        "top_subjects":        [{"subject": s, "count": c} for s, c in top_subjects],
     }

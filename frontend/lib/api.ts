@@ -233,6 +233,11 @@ export interface QuizChartPoint {
   created_at: string;
 }
 
+export interface TopSubject {
+  subject: string;
+  count: number;
+}
+
 export interface StatsSummary {
   total_documents: number;
   total_flashcards: number;
@@ -244,6 +249,22 @@ export interface StatsSummary {
   best_quiz_score: number;
   recent_quiz_chart: QuizChartPoint[];
   recent_activity: RecentActivity[];
+  study_streak: number;
+  top_subjects: TopSubject[];
+}
+
+export async function importFromUrl(url: string, subject?: string): Promise<Document> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/documents/import-url`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ url, subject: subject?.trim() || null }),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Error importando la URL");
+  }
+  return res.json();
 }
 
 export async function getStatsSummary(): Promise<StatsSummary> {

@@ -62,7 +62,7 @@ export default function NavBar() {
                     <User size={12} className="text-violet-400" />
                   </div>
                   <span className="hidden sm:block max-w-[120px] truncate">
-                    {user.email?.split("@")[0]}
+                    {(user.user_metadata?.full_name as string) || user.email?.split("@")[0]}
                   </span>
                 </Link>
                 <button
