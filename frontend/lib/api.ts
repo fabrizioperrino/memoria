@@ -46,9 +46,11 @@ export interface KeyConcept {
 export interface Document {
   id: string;
   title: string;
-  file_name: string;
-  file_type: string;
+  file_name: string | null;
+  file_type: string | null;
   status: "processing" | "ready" | "error";
+  subject: string | null;
+  share_token: string | null;
   summary: string | null;
   flashcards: Flashcard[] | null;
   exam_questions: ExamQuestion[] | null;
@@ -65,10 +67,11 @@ export interface DueCardsResponse {
 
 // ─── Documents ────────────────────────────────────────────────────────────────
 
-export async function uploadDocument(file: File): Promise<Document> {
+export async function uploadDocument(file: File, subject?: string): Promise<Document> {
   const headers = await authHeadersNoContentType();
   const formData = new FormData();
   formData.append("file", file);
+  if (subject?.trim()) formData.append("subject", subject.trim());
 
   const res = await fetch(`${API_URL}/documents/upload`, {
     method: "POST",
@@ -79,6 +82,26 @@ export async function uploadDocument(file: File): Promise<Document> {
   if (!res.ok) {
     const error = await res.json();
     throw new Error(error.detail || "Error subiendo el documento");
+  }
+
+  return res.json();
+}
+
+export async function uploadText(
+  title: string,
+  content: string,
+  subject?: string
+): Promise<Document> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/documents/upload-text`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title, content, subject: subject?.trim() || null }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || "Error procesando el texto");
   }
 
   return res.json();
@@ -101,6 +124,27 @@ export async function getDocument(id: string): Promise<Document> {
 export async function deleteDocument(id: string): Promise<void> {
   const headers = await authHeadersNoContentType();
   await fetch(`${API_URL}/documents/${id}`, { method: "DELETE", headers });
+}
+
+export async function shareDocument(id: string): Promise<{ share_token: string }> {
+  const headers = await authHeadersNoContentType();
+  const res = await fetch(`${API_URL}/documents/${id}/share`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) throw new Error("Error generando el link");
+  return res.json();
+}
+
+export async function unshareDocument(id: string): Promise<void> {
+  const headers = await authHeadersNoContentType();
+  await fetch(`${API_URL}/documents/${id}/share`, { method: "DELETE", headers });
+}
+
+export async function getSharedDocument(token: string): Promise<Document> {
+  const res = await fetch(`${API_URL}/documents/shared/${token}`);
+  if (!res.ok) throw new Error("Link inválido o documento eliminado");
+  return res.json();
 }
 
 // ─── Review ───────────────────────────────────────────────────────────────────

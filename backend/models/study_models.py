@@ -73,8 +73,11 @@ class DocumentCreate(BaseModel):
 class DocumentResponse(BaseModel):
     id: str
     title: str
-    file_name: str
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
     status: DocumentStatus
+    subject: Optional[str] = None
+    share_token: Optional[str] = None
     summary: Optional[str] = None
     flashcards: Optional[list[Flashcard]] = None
     exam_questions: Optional[list[ExamQuestion]] = None

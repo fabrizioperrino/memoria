@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Rutas públicas (no requieren auth)
-  const publicRoutes = ["/auth"];
+  const publicRoutes = ["/auth", "/share"];
   const isPublic = publicRoutes.some((r) => pathname.startsWith(r));
 
   // Si no está autenticado y la ruta no es pública → redirigir a /auth

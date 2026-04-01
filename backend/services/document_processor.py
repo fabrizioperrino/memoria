@@ -55,6 +55,24 @@ async def process_pdf(pdf_bytes: bytes) -> Tuple[StudyMaterialSchema, str]:
     return material, text  # devolvemos el texto completo (sin truncar) para el chat
 
 
+async def process_text(text: str) -> Tuple[StudyMaterialSchema, str]:
+    """
+    Procesa texto pegado directamente por el usuario.
+    Devuelve (material, raw_text).
+    """
+    if not text.strip():
+        raise ValueError("El texto no puede estar vacío.")
+
+    content = text[:50000]
+
+    material = ai.generate_structured(
+        user_prompt=USER_PROMPT_TEMPLATE.format(content=content),
+        system_prompt=SYSTEM_PROMPT,
+        response_schema=StudyMaterialSchema,
+    )
+    return material, text
+
+
 async def process_image(image_bytes: bytes, mime_type: str) -> Tuple[StudyMaterialSchema, str]:
     """
     Procesa una foto de cuaderno con Groq Vision.

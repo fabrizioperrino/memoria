@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import {
   listDocuments,
   deleteDocument,
+  shareDocument,
+  unshareDocument,
   getStatsSummary,
   Document,
   StatsSummary,
@@ -27,6 +29,11 @@ import {
   RotateCcw,
   MessageSquare,
   Upload,
+  Search,
+  Share2,
+  Link2,
+  LinkOff,
+  AlignLeft,
 } from "lucide-react";
 
 // ── Sparkline chart ────────────────────────────────────────────────────────────
@@ -75,22 +82,17 @@ function ScoreSparkline({ data }: { data: QuizChartPoint[] }) {
           <circle key={i} cx={p.x} cy={p.y} r="3" fill="#8b5cf6" />
         ))}
       </svg>
-
-      {/* Trend badge */}
       <div className={`absolute top-0 right-0 text-xs font-semibold px-2 py-0.5 rounded-lg ${
         trend >= 0 ? "text-emerald-400 bg-emerald-500/10" : "text-red-400 bg-red-500/10"
       }`}>
         {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}%
       </div>
-
-      {/* Y axis labels */}
       <div className="absolute left-0 top-0 text-[10px] text-gray-600">{max}%</div>
       <div className="absolute left-0 bottom-0 text-[10px] text-gray-600">{min}%</div>
     </div>
   );
 }
 
-// ── Score color helper ─────────────────────────────────────────────────────────
 function scoreColor(pct: number) {
   if (pct >= 70) return "text-emerald-400";
   if (pct >= 50) return "text-amber-400";
@@ -102,11 +104,20 @@ function scoreBarColor(pct: number) {
   return "bg-red-500";
 }
 
+// ── File type icon ─────────────────────────────────────────────────────────────
+function DocIcon({ type }: { type: string | null }) {
+  if (type === "text") return <AlignLeft className="text-gray-400" size={18} />;
+  return <FileText className="text-gray-400" size={18} />;
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [stats, setStats] = useState<StatsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats,     setStats]     = useState<StatsSummary | null>(null);
+  const [loading,   setLoading]   = useState(true);
+  const [search,    setSearch]    = useState("");
+  const [activeSubject, setActiveSubject] = useState<string | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -120,11 +131,55 @@ export default function Dashboard() {
     }).finally(() => setLoading(false));
   }, []);
 
+  // ── Materias únicas ────────────────────────────────────────────────────────
+  const subjects = useMemo(() => {
+    const set = new Set<string>();
+    documents.forEach((d) => { if (d.subject) set.add(d.subject); });
+    return Array.from(set).sort();
+  }, [documents]);
+
+  // ── Filtro combinado ───────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    return documents.filter((d) => {
+      const matchSearch  = d.title.toLowerCase().includes(search.toLowerCase());
+      const matchSubject = !activeSubject || d.subject === activeSubject;
+      return matchSearch && matchSubject;
+    });
+  }, [documents, search, activeSubject]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
   async function handleDelete(id: string, title: string) {
     if (!confirm(`¿Eliminar "${title}"?`)) return;
     await deleteDocument(id);
     setDocuments((prev) => prev.filter((d) => d.id !== id));
     toast.success("Documento eliminado");
+  }
+
+  async function handleShare(doc: Document) {
+    setSharingId(doc.id);
+    try {
+      if (doc.share_token) {
+        // Ya tiene link → descompartir
+        await unshareDocument(doc.id);
+        setDocuments((prev) =>
+          prev.map((d) => d.id === doc.id ? { ...d, share_token: null } : d)
+        );
+        toast.success("Link de compartir eliminado");
+      } else {
+        // Generar link
+        const { share_token } = await shareDocument(doc.id);
+        const url = `${window.location.origin}/share/${share_token}`;
+        await navigator.clipboard.writeText(url);
+        setDocuments((prev) =>
+          prev.map((d) => d.id === doc.id ? { ...d, share_token } : d)
+        );
+        toast.success("¡Link copiado al portapapeles! 🔗");
+      }
+    } catch {
+      toast.error("Error al compartir");
+    } finally {
+      setSharingId(null);
+    }
   }
 
   return (
@@ -179,7 +234,6 @@ export default function Dashboard() {
             {stats && (stats.recent_quiz_chart.length > 0 || stats.recent_activity.length > 0) && (
               <div className="grid lg:grid-cols-2 gap-4">
 
-                {/* Quiz score evolution */}
                 <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-6">
                   <div className="flex items-center justify-between mb-5">
                     <div>
@@ -202,7 +256,6 @@ export default function Dashboard() {
                   <ScoreSparkline data={stats.recent_quiz_chart} />
                 </div>
 
-                {/* Actividad reciente */}
                 <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-6">
                   <h3 className="font-semibold flex items-center gap-2 mb-5">
                     <Brain size={16} className="text-violet-400" /> Actividad reciente
@@ -266,9 +319,53 @@ export default function Dashboard() {
 
             {/* ── Documentos ── */}
             <div>
-              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">
-                Tus documentos
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
+                  Tus documentos
+                </h2>
+                {/* Búsqueda */}
+                {documents.length > 0 && (
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Buscar..."
+                      className="pl-8 pr-4 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm placeholder-gray-600 focus:outline-none focus:border-violet-500/60 transition-all w-48"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Filtro por materias */}
+              {subjects.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button
+                    onClick={() => setActiveSubject(null)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                      !activeSubject
+                        ? "bg-violet-600 text-white"
+                        : "bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10"
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  {subjects.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setActiveSubject(activeSubject === s ? null : s)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                        activeSubject === s
+                          ? "bg-violet-600 text-white"
+                          : "bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {documents.length === 0 ? (
                 <div className="rounded-2xl border border-white/5 border-dashed bg-white/[0.02] flex flex-col items-center justify-center py-20 text-center">
@@ -276,7 +373,7 @@ export default function Dashboard() {
                     <Sparkles className="text-violet-400" size={28} />
                   </div>
                   <h3 className="text-lg font-semibold mb-1">Todavía no subiste nada</h3>
-                  <p className="text-gray-500 text-sm mb-6">Subí un PDF o foto de cuaderno para empezar</p>
+                  <p className="text-gray-500 text-sm mb-6">Subí un PDF, foto de cuaderno o pegá texto para empezar</p>
                   <Link
                     href="/upload"
                     className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all"
@@ -284,19 +381,42 @@ export default function Dashboard() {
                     Subir primer material
                   </Link>
                 </div>
+              ) : filtered.length === 0 ? (
+                <div className="rounded-2xl border border-white/5 bg-white/[0.02] flex flex-col items-center justify-center py-16 text-center">
+                  <Search size={28} className="text-gray-600 mb-3" />
+                  <p className="text-gray-500 text-sm">No hay documentos que coincidan con tu búsqueda</p>
+                  <button
+                    onClick={() => { setSearch(""); setActiveSubject(null); }}
+                    className="mt-3 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
               ) : (
                 <div className="grid gap-3">
-                  {documents.map((doc) => (
+                  {filtered.map((doc) => (
                     <div
                       key={doc.id}
                       className="group rounded-2xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/10 transition-all p-5 flex items-center gap-4"
                     >
                       <div className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
-                        <FileText className="text-gray-400" size={18} />
+                        <DocIcon type={doc.file_type} />
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{doc.title}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium truncate">{doc.title}</p>
+                          {doc.subject && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20 shrink-0">
+                              {doc.subject}
+                            </span>
+                          )}
+                          {doc.share_token && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 shrink-0 flex items-center gap-1">
+                              <Link2 size={9} /> Compartido
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-3 mt-1 flex-wrap">
                           <span className="text-xs text-gray-500 flex items-center gap-1">
                             <Clock size={11} />
@@ -330,6 +450,18 @@ export default function Dashboard() {
                         >
                           <RotateCcw size={11} /> Repasar
                         </Link>
+                        <button
+                          onClick={() => handleShare(doc)}
+                          disabled={sharingId === doc.id}
+                          title={doc.share_token ? "Dejar de compartir" : "Compartir y copiar link"}
+                          className={`p-1.5 rounded-lg transition-all ${
+                            doc.share_token
+                              ? "text-emerald-400 hover:text-red-400 hover:bg-red-500/10"
+                              : "text-gray-600 hover:text-emerald-400 hover:bg-emerald-500/10"
+                          } disabled:opacity-40`}
+                        >
+                          {doc.share_token ? <LinkOff size={14} /> : <Share2 size={14} />}
+                        </button>
                         <button
                           onClick={() => handleDelete(doc.id, doc.title)}
                           className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
