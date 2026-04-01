@@ -40,7 +40,10 @@ export default function AuthPage() {
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setSuccess("¡Cuenta creada! Revisá tu email para confirmar tu cuenta.");
+        // Sin confirmación de email, iniciamos sesión directo
+        const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+        if (loginError) throw loginError;
+        router.replace("/");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
