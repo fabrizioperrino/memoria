@@ -32,7 +32,7 @@ import {
   Search,
   Share2,
   Link2,
-  LinkOff,
+  Link2Off,
   AlignLeft,
 } from "lucide-react";
 
@@ -460,7 +460,7 @@ export default function Dashboard() {
                               : "text-gray-600 hover:text-emerald-400 hover:bg-emerald-500/10"
                           } disabled:opacity-40`}
                         >
-                          {doc.share_token ? <LinkOff size={14} /> : <Share2 size={14} />}
+                          {doc.share_token ? <Link2Off size={14} /> : <Share2 size={14} />}
                         </button>
                         <button
                           onClick={() => handleDelete(doc.id, doc.title)}
