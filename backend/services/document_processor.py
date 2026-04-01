@@ -35,24 +35,50 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     return full_text.strip()
 
 
+def render_pdf_pages_as_images(pdf_bytes: bytes, max_pages: int = 6, dpi: int = 100) -> list[bytes]:
+    """Renderiza las primeras páginas de un PDF como imágenes PNG (para PDFs escaneados)."""
+    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    images = []
+    for i, page in enumerate(doc):
+        if i >= max_pages:
+            break
+        pix = page.get_pixmap(dpi=dpi)
+        images.append(pix.tobytes("png"))
+    doc.close()
+    return images
+
+
 async def process_pdf(pdf_bytes: bytes) -> Tuple[StudyMaterialSchema, str]:
     """
     Procesa un PDF: extrae texto y genera material de estudio.
+    Si el PDF es escaneado (sin texto), usa Groq Vision como fallback.
     Devuelve (material, raw_text) — el texto crudo se guarda para el chat RAG.
     """
     text = extract_text_from_pdf(pdf_bytes)
 
-    if not text:
-        raise ValueError("No se pudo extraer texto del PDF.")
+    # ── PDF con texto normal ───────────────────────────────────────────────
+    if text and len(text.strip()) >= 100:
+        content = text[:50000]
+        material = ai.generate_structured(
+            user_prompt=USER_PROMPT_TEMPLATE.format(content=content),
+            system_prompt=SYSTEM_PROMPT,
+            response_schema=StudyMaterialSchema,
+        )
+        return material, text
 
-    content = text[:50000]
+    # ── PDF escaneado: fallback a visión ──────────────────────────────────
+    images = render_pdf_pages_as_images(pdf_bytes, max_pages=6)
+    if not images:
+        raise ValueError("No se pudo procesar el PDF. Probá con un PDF con texto seleccionable.")
 
-    material = ai.generate_structured(
-        user_prompt=USER_PROMPT_TEMPLATE.format(content=content),
-        system_prompt=SYSTEM_PROMPT,
-        response_schema=StudyMaterialSchema,
+    prompt = USER_PROMPT_TEMPLATE.format(
+        content="[El contenido está en las imágenes adjuntas (páginas del PDF escaneado). "
+                "Leé y analizá todo el texto visible en cada página.]"
     )
-    return material, text  # devolvemos el texto completo (sin truncar) para el chat
+    image_tuples = [(img, "image/png") for img in images]
+    material = ai.generate_from_images(image_tuples, prompt, StudyMaterialSchema)
+    raw_text = f"[PDF escaneado — procesado con visión IA, {len(images)} páginas]\n\n{material.summary}"
+    return material, raw_text
 
 
 async def process_text(text: str) -> Tuple[StudyMaterialSchema, str]:

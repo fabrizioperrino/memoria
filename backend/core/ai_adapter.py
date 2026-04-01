@@ -53,6 +53,41 @@ class AIAdapter:
         raw = response.choices[0].message.content
         return response_schema.model_validate_json(raw)
 
+    def generate_from_images(self, images: list[tuple[bytes, str]], prompt: str, response_schema: type) -> BaseModel:
+        """
+        Procesa múltiples imágenes con Groq Vision (llama-4-scout).
+        images: lista de (image_bytes, mime_type)
+        """
+        import base64
+        schema_json = json.dumps(response_schema.model_json_schema(), indent=2)
+
+        system_prompt = (
+            "Analizá el contenido de todas las imágenes (páginas del documento) y generá material de estudio.\n"
+            f"Respondé ÚNICAMENTE con un JSON válido que siga este schema:\n{schema_json}"
+        )
+
+        content: list = []
+        for image_bytes, mime_type in images:
+            image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime_type};base64,{image_b64}"},
+            })
+        content.append({"type": "text", "text": prompt})
+
+        response = self.client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": content},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+
+        raw = response.choices[0].message.content
+        return response_schema.model_validate_json(raw)
+
     def generate_from_image(self, image_bytes: bytes, mime_type: str, prompt: str, response_schema: type) -> BaseModel:
         """
         Procesa una imagen con Groq Vision (llama-4-scout).
