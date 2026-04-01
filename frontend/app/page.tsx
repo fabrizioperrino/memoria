@@ -222,9 +222,9 @@ export default function Dashboard() {
             </h1>
             <div className="flex items-center gap-3">
               <p className="text-gray-500">Tu progreso de estudio en un vistazo.</p>
-              {stats && stats.study_streak > 0 && (
+              {stats && (stats.study_streak ?? 0) > 0 && (
                 <span className="flex items-center gap-1 text-xs font-semibold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20">
-                  <Flame size={11} /> {stats.study_streak} día{stats.study_streak !== 1 ? "s" : ""} seguidos
+                  <Flame size={11} /> {stats.study_streak ?? 0} día{(stats.study_streak ?? 0) !== 1 ? "s" : ""} seguidos
                 </span>
               )}
             </div>

@@ -102,8 +102,7 @@ function EditableField({
 
 export default function ProfilePage() {
   const { user, signOut, loading } = useAuth();
-  const router   = useRouter();
-  const supabase = createClient();
+  const router = useRouter();
 
   const [stats,        setStats]        = useState<StatsSummary | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -134,16 +133,21 @@ export default function ProfilePage() {
   }
 
   async function saveField(field: string, value: string) {
-    const { error } = await supabase.auth.updateUser({
-      data: { [field]: value },
-    });
-    if (error) {
-      toast.error("No se pudo guardar");
-    } else {
-      toast.success("Guardado ✓");
-      if (field === "full_name")  setFullName(value);
-      if (field === "faculty")    setFaculty(value);
-      if (field === "university") setUniversity(value);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({
+        data: { [field]: value },
+      });
+      if (error) {
+        toast.error("No se pudo guardar");
+      } else {
+        toast.success("Guardado ✓");
+        if (field === "full_name")  setFullName(value);
+        if (field === "faculty")    setFaculty(value);
+        if (field === "university") setUniversity(value);
+      }
+    } catch {
+      toast.error("Error al guardar. Intentá de nuevo.");
     }
   }
 
@@ -187,7 +191,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Streak banner ── */}
-      {stats && stats.study_streak > 0 && (
+      {stats && (stats.study_streak ?? 0) > 0 && (
         <div className="mb-8 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5 flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-orange-500/15 flex items-center justify-center shrink-0">
             <Flame size={22} className="text-orange-400" />
@@ -232,13 +236,13 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Materias ── */}
-      {stats && stats.top_subjects.length > 0 && (
+      {stats && (stats.top_subjects?.length ?? 0) > 0 && (
         <div className="mb-8">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-4">
             Mis materias
           </h2>
           <div className="flex flex-wrap gap-2">
-            {stats.top_subjects.map(({ subject, count }) => (
+            {(stats.top_subjects ?? []).map(({ subject, count }) => (
               <div key={subject}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20">
                 <BookOpen size={12} className="text-violet-400" />
@@ -269,7 +273,7 @@ export default function ProfilePage() {
             <StatCard icon={<HelpCircle size={18} />} label="Quizzes completados"  value={stats.total_quiz_attempts} color="emerald" />
             <StatCard icon={<Star size={18} />}       label="Mejor quiz"           value={stats.best_quiz_score > 0 ? `${stats.best_quiz_score}%` : "—"} color="amber" />
             <StatCard icon={<BarChart2 size={18} />}  label="Promedio de quizzes"  value={stats.average_quiz_score > 0 ? `${stats.average_quiz_score}%` : "—"} color="violet" />
-            <StatCard icon={<Flame size={18} />}      label="Racha actual"         value={`${stats.study_streak} ${stats.study_streak === 1 ? "día" : "días"}`} color="orange" />
+            <StatCard icon={<Flame size={18} />}      label="Racha actual"         value={`${stats.study_streak ?? 0} ${(stats.study_streak ?? 0) === 1 ? "día" : "días"}`} color="orange" />
           </div>
         ) : (
           <p className="text-sm text-gray-600">No se pudieron cargar las estadísticas.</p>
