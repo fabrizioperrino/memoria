@@ -24,6 +24,154 @@ CONTENIDO DEL DOCUMENTO:
 ---
 """
 
+CHUNK_MAX_CHARS = 9000
+CHUNK_OVERLAP_CHARS = 800
+MAX_TOTAL_INPUT_CHARS = 120000
+MAX_CHUNKS = 8
+
+
+def split_text_into_chunks(
+    text: str,
+    chunk_size: int = CHUNK_MAX_CHARS,
+    overlap: int = CHUNK_OVERLAP_CHARS,
+    max_chunks: int = MAX_CHUNKS,
+) -> list[str]:
+    """Divide texto largo en chunks con overlap para no perder contexto."""
+    clean = text.strip()
+    if not clean:
+        return []
+    if len(clean) <= chunk_size:
+        return [clean]
+
+    chunks: list[str] = []
+    start = 0
+    while start < len(clean) and len(chunks) < max_chunks:
+        end = min(start + chunk_size, len(clean))
+        # Intentar cortar por salto de línea para mantener coherencia.
+        if end < len(clean):
+            split = clean.rfind("\n", start, end)
+            if split > start + int(chunk_size * 0.6):
+                end = split
+        part = clean[start:end].strip()
+        if part:
+            chunks.append(part)
+        if end >= len(clean):
+            break
+        start = max(end - overlap, start + 1)
+    return chunks
+
+
+def merge_materials(materials: list[StudyMaterialSchema]) -> StudyMaterialSchema:
+    """Combina outputs parciales con límites para evitar respuestas gigantes."""
+    if not materials:
+        raise ValueError("No se pudo generar material a partir de los chunks.")
+
+    summary_parts = [m.summary.strip() for m in materials if m.summary and m.summary.strip()]
+    merged_summary = "\n\n".join(summary_parts)[:6000]
+
+    flashcards = []
+    seen_questions = set()
+    for m in materials:
+        for fc in m.flashcards:
+            key = fc.question.strip().lower()
+            if key and key not in seen_questions:
+                flashcards.append(fc)
+                seen_questions.add(key)
+            if len(flashcards) >= 18:
+                break
+        if len(flashcards) >= 18:
+            break
+
+    exam_questions = []
+    seen_exam = set()
+    for m in materials:
+        for q in m.exam_questions:
+            key = q.question.strip().lower()
+            if key and key not in seen_exam:
+                exam_questions.append(q)
+                seen_exam.add(key)
+            if len(exam_questions) >= 10:
+                break
+        if len(exam_questions) >= 10:
+            break
+
+    key_concepts = []
+    seen_concepts = set()
+    for m in materials:
+        for kc in m.key_concepts:
+            key = kc.concept.strip().lower()
+            if key and key not in seen_concepts:
+                key_concepts.append(kc)
+                seen_concepts.add(key)
+            if len(key_concepts) >= 12:
+                break
+        if len(key_concepts) >= 12:
+            break
+
+    return StudyMaterialSchema(
+        summary=merged_summary,
+        flashcards=flashcards,
+        exam_questions=exam_questions,
+        key_concepts=key_concepts,
+    )
+
+
+def generate_material_with_chunking(text: str) -> StudyMaterialSchema:
+    """
+    Para textos largos evita un request gigante (TPM) y procesa por chunks.
+    Luego unifica y hace una síntesis final.
+    """
+    clipped_text = text[:MAX_TOTAL_INPUT_CHARS]
+    chunks = split_text_into_chunks(clipped_text)
+    if not chunks:
+        raise ValueError("No se encontró contenido para procesar.")
+
+    if len(chunks) == 1:
+        return ai.generate_structured(
+            user_prompt=USER_PROMPT_TEMPLATE.format(content=chunks[0]),
+            system_prompt=SYSTEM_PROMPT,
+            response_schema=StudyMaterialSchema,
+        )
+
+    partials: list[StudyMaterialSchema] = []
+    for i, chunk in enumerate(chunks, start=1):
+        chunk_prompt = f"""
+Este es el bloque {i}/{len(chunks)} de un documento largo.
+Generá material parcial útil de este bloque:
+- resumen breve del bloque
+- 4 a 8 flashcards
+- 2 a 4 preguntas de examen
+- 3 a 6 conceptos clave
+
+BLOQUE:
+---
+{chunk}
+---
+"""
+        partial = ai.generate_structured(
+            user_prompt=chunk_prompt,
+            system_prompt=SYSTEM_PROMPT,
+            response_schema=StudyMaterialSchema,
+        )
+        partials.append(partial)
+
+    merged = merge_materials(partials)
+
+    final_prompt = f"""
+Unificá y mejorá este material parcial generado por chunks de un documento largo.
+El objetivo es entregar una versión final limpia, sin duplicados, pedagógica y completa.
+
+MATERIAL PARCIAL:
+---
+{merged.model_dump_json()}
+---
+"""
+    return ai.generate_structured(
+        user_prompt=final_prompt,
+        system_prompt=SYSTEM_PROMPT,
+        response_schema=StudyMaterialSchema,
+    )
+
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     """Extrae el texto de un PDF usando PyMuPDF."""
@@ -58,12 +206,7 @@ async def process_pdf(pdf_bytes: bytes) -> Tuple[StudyMaterialSchema, str]:
 
     # ── PDF con texto normal ───────────────────────────────────────────────
     if text and len(text.strip()) >= 100:
-        content = text[:50000]
-        material = ai.generate_structured(
-            user_prompt=USER_PROMPT_TEMPLATE.format(content=content),
-            system_prompt=SYSTEM_PROMPT,
-            response_schema=StudyMaterialSchema,
-        )
+        material = generate_material_with_chunking(text)
         return material, text
 
     # ── PDF escaneado: fallback a visión ──────────────────────────────────
@@ -89,13 +232,7 @@ async def process_text(text: str) -> Tuple[StudyMaterialSchema, str]:
     if not text.strip():
         raise ValueError("El texto no puede estar vacío.")
 
-    content = text[:50000]
-
-    material = ai.generate_structured(
-        user_prompt=USER_PROMPT_TEMPLATE.format(content=content),
-        system_prompt=SYSTEM_PROMPT,
-        response_schema=StudyMaterialSchema,
-    )
+    material = generate_material_with_chunking(text)
     return material, text
 
 
