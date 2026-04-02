@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Brain, Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
@@ -8,8 +8,8 @@ import { Brain, Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-reac
 type Mode = "login" | "signup";
 
 export default function AuthPage() {
-  const router   = useRouter();
-  const supabase = createClient();
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
 
   const [mode, setMode]           = useState<Mode>("login");
   const [email, setEmail]         = useState("");
@@ -19,12 +19,16 @@ export default function AuthPage() {
   const [error, setError]         = useState<string | null>(null);
   const [success, setSuccess]     = useState<string | null>(null);
 
-  // Redirigir si ya está autenticado
+  // Redirigir si ya está autenticado y escuchar cambios de sesión
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/");
+      if (data.session) window.location.href = "/";
     });
-  }, []);
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+      if (sess) window.location.href = "/";
+    });
+    return () => listener.subscription.unsubscribe();
+  }, [supabase]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,14 +40,17 @@ export default function AuthPage() {
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        router.replace("/");
+        // Hard redirect para asegurar que middleware ya vea cookies de sesión.
+        window.location.href = "/";
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        // Sin confirmación de email, iniciamos sesión directo
-        const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-        if (loginError) throw loginError;
-        router.replace("/");
+        // Si signup no devuelve sesión (edge case), intentar login explícito.
+        if (!data.session) {
+          const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+          if (loginError) throw loginError;
+        }
+        window.location.href = "/";
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
