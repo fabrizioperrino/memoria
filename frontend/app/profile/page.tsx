@@ -167,23 +167,23 @@ export default function ProfilePage() {
   const initials    = displayName.slice(0, 2).toUpperCase();
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-12">
+    <div className="max-w-2xl mx-auto px-3 sm:px-6 py-6 sm:py-12 pb-[max(2rem,env(safe-area-inset-bottom))]">
       <Toaster richColors theme="dark" />
 
       {/* ── Avatar + Info ── */}
-      <div className="flex items-center gap-6 mb-10">
-        <div className="w-20 h-20 rounded-2xl bg-violet-500/20 flex items-center justify-center text-2xl font-bold text-violet-400 select-none shrink-0">
+      <div className="flex items-center gap-4 sm:gap-6 mb-8 sm:mb-10">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-violet-500/20 flex items-center justify-center text-xl sm:text-2xl font-bold text-violet-400 select-none shrink-0">
           {initials}
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-white mb-1">
             {displayName}
           </h1>
-          <div className="flex items-center gap-2 text-sm text-gray-400">
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-400">
             <Mail size={13} />
-            <span>{user?.email}</span>
+            <span className="truncate max-w-[70vw] sm:max-w-none">{user?.email}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 mt-1">
             <Calendar size={13} />
             <span>Se unió el {joinedAt}</span>
           </div>
@@ -192,12 +192,12 @@ export default function ProfilePage() {
 
       {/* ── Streak banner ── */}
       {stats && (stats.study_streak ?? 0) > 0 && (
-        <div className="mb-8 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5 flex items-center gap-4">
+        <div className="mb-8 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
           <div className="w-12 h-12 rounded-xl bg-orange-500/15 flex items-center justify-center shrink-0">
             <Flame size={22} className="text-orange-400" />
           </div>
           <div>
-            <p className="font-bold text-orange-300 text-lg">
+            <p className="font-bold text-orange-300 text-base sm:text-lg">
               🔥 {stats.study_streak} {stats.study_streak === 1 ? "día" : "días"} seguidos estudiando
             </p>
             <p className="text-xs text-orange-500/70 mt-0.5">¡Seguí así! La constancia es la clave.</p>
@@ -261,7 +261,7 @@ export default function ProfilePage() {
         </h2>
 
         {statsLoading ? (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="h-[72px] rounded-xl bg-white/[0.02] border border-white/5 animate-pulse" />
             ))}
@@ -284,7 +284,7 @@ export default function ProfilePage() {
       <div className="pt-6 border-t border-white/5">
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-red-400 border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/30 transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-red-400 border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/30 transition-all active:scale-95"
         >
           <LogOut size={15} />
           Cerrar sesión

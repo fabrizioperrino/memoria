@@ -86,14 +86,14 @@ export default function UploadPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#0f0f13] flex items-center justify-center p-6">
+    <main className="min-h-screen bg-[#0f0f13] flex items-start sm:items-center justify-center p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <Toaster richColors theme="dark" />
 
-      <div className="w-full max-w-xl">
+      <div className="w-full max-w-xl pt-2 sm:pt-0">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Subir material</h1>
-          <p className="text-gray-400 text-sm">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Subir material</h1>
+          <p className="text-gray-400 text-sm leading-relaxed">
             Subí un archivo o pegá texto directamente. La IA genera todo el material de estudio.
           </p>
         </div>
@@ -109,7 +109,7 @@ export default function UploadPage() {
               key={id}
               onClick={() => { setTab(id); setStep("idle"); }}
               disabled={uploading}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
                 tab === id
                   ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20"
                   : "text-gray-500 hover:text-gray-300"
@@ -127,7 +127,7 @@ export default function UploadPage() {
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
             onClick={() => !uploading && document.getElementById("file-input")?.click()}
-            className={`relative rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden
+            className={`relative rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden active:scale-[0.995]
               ${dragging ? "border-violet-500 bg-violet-500/5" : ""}
               ${file && !dragging ? "border-white/20 bg-white/[0.03]" : ""}
               ${!file && !dragging ? "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]" : ""}
@@ -140,7 +140,7 @@ export default function UploadPage() {
               className="hidden"
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             />
-            <div className="p-12 flex flex-col items-center text-center">
+            <div className="p-6 sm:p-12 flex flex-col items-center text-center">
               {file ? (
                 <>
                   <div className="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center mb-4">
@@ -153,7 +153,7 @@ export default function UploadPage() {
                   <p className="text-sm text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                   <button
                     onClick={(e) => { e.stopPropagation(); setFile(null); setStep("idle"); }}
-                    className="mt-3 flex items-center gap-1 text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                    className="mt-3 flex items-center gap-1 text-xs text-gray-600 hover:text-gray-400 transition-colors active:scale-95"
                   >
                     <X size={12} /> Cambiar archivo
                   </button>
@@ -223,6 +223,8 @@ export default function UploadPage() {
                   value={urlValue}
                   onChange={(e) => setUrlValue(e.target.value)}
                   placeholder="https://es.wikipedia.org/wiki/..."
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   disabled={uploading}
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm placeholder-gray-600 focus:outline-none focus:border-violet-500/60 focus:bg-white/[0.07] transition-all disabled:opacity-50"
                 />
@@ -302,7 +304,7 @@ export default function UploadPage() {
         <button
           disabled={!canSubmit}
           onClick={handleUpload}
-          className={`w-full mt-4 h-13 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2
+          className={`w-full mt-4 h-13 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]
             ${canSubmit
               ? "bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-600/20 cursor-pointer"
               : "bg-white/5 text-gray-600 cursor-not-allowed"

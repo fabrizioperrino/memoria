@@ -212,16 +212,16 @@ export default function Dashboard() {
     <main className="min-h-screen bg-[#0f0f13]">
       <Toaster richColors theme="dark" />
 
-      <div className="max-w-6xl mx-auto px-6 py-10 space-y-10">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-10 pb-[max(2rem,env(safe-area-inset-bottom))]">
 
         {/* ── Hero ── */}
-        <div className="flex items-end justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold mb-1">
+            <h1 className="text-2xl sm:text-4xl font-bold mb-1">
               Hola, {(user?.user_metadata?.full_name as string)?.split(" ")[0] || user?.email?.split("@")[0]} 👋
             </h1>
-            <div className="flex items-center gap-3">
-              <p className="text-gray-500">Tu progreso de estudio en un vistazo.</p>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <p className="text-gray-500 text-sm sm:text-base">Tu progreso de estudio en un vistazo.</p>
               {stats && (stats.study_streak ?? 0) > 0 && (
                 <span className="flex items-center gap-1 text-xs font-semibold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20">
                   <Flame size={11} /> {stats.study_streak ?? 0} día{(stats.study_streak ?? 0) !== 1 ? "s" : ""} seguidos
@@ -231,15 +231,21 @@ export default function Dashboard() {
           </div>
           <Link
             href="/upload"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20 active:scale-[0.98] w-full sm:w-auto"
           >
             <Upload size={15} /> Subir material
           </Link>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-32">
-            <div className="w-7 h-7 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-24 rounded-2xl border border-white/5 bg-white/[0.03] animate-pulse" />
+              ))}
+            </div>
+            <div className="h-44 rounded-2xl border border-white/5 bg-white/[0.03] animate-pulse" />
+            <div className="h-44 rounded-2xl border border-white/5 bg-white/[0.03] animate-pulse" />
           </div>
         ) : (
           <>
@@ -354,20 +360,20 @@ export default function Dashboard() {
 
             {/* ── Documentos ── */}
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
                 <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
                   Tus documentos
                 </h2>
                 {/* Búsqueda */}
                 {documents.length > 0 && (
-                  <div className="relative">
+                  <div className="relative w-full sm:w-auto">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
                     <input
                       type="text"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Buscar..."
-                      className="pl-8 pr-4 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm placeholder-gray-600 focus:outline-none focus:border-violet-500/60 transition-all w-48"
+                      className="pl-8 pr-4 py-2 rounded-lg bg-white/5 border border-white/10 text-sm placeholder-gray-600 focus:outline-none focus:border-violet-500/60 transition-all w-full sm:w-48"
                     />
                   </div>
                 )}
@@ -378,7 +384,7 @@ export default function Dashboard() {
                 <div className="flex flex-wrap gap-2 mb-4">
                   <button
                     onClick={() => setActiveSubject(null)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${
                       !activeSubject
                         ? "bg-violet-600 text-white"
                         : "bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10"
@@ -390,7 +396,7 @@ export default function Dashboard() {
                     <button
                       key={s}
                       onClick={() => setActiveSubject(activeSubject === s ? null : s)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${
                         activeSubject === s
                           ? "bg-violet-600 text-white"
                           : "bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10"
@@ -411,7 +417,7 @@ export default function Dashboard() {
                   <p className="text-gray-500 text-sm mb-6">Subí un PDF, foto de cuaderno o pegá texto para empezar</p>
                   <Link
                     href="/upload"
-                    className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all"
+                    className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all active:scale-[0.98]"
                   >
                     Subir primer material
                   </Link>
@@ -432,7 +438,7 @@ export default function Dashboard() {
                   {filtered.map((doc) => (
                     <div
                       key={doc.id}
-                      className="group rounded-2xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/10 transition-all p-5 flex items-center gap-4"
+                    className="group rounded-2xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/10 transition-all p-3 sm:p-5 flex items-center gap-3 sm:gap-4 active:scale-[0.995]"
                     >
                       <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
                         doc.status === "error" ? "bg-red-500/10" : "bg-white/5"
@@ -447,7 +453,7 @@ export default function Dashboard() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium truncate">{doc.title}</p>
+                          <p className="font-medium truncate text-sm sm:text-base">{doc.title}</p>
                           {doc.status === "processing" && (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 border border-violet-500/20 shrink-0">
                               Procesando...
