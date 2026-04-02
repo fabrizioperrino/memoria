@@ -1,6 +1,13 @@
 import { createClient } from "@/lib/supabase/client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL =
+  typeof window !== "undefined" &&
+  window.location.protocol === "https:" &&
+  RAW_API_URL.startsWith("http://") &&
+  !RAW_API_URL.includes("localhost")
+    ? RAW_API_URL.replace("http://", "https://")
+    : RAW_API_URL;
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -255,16 +262,24 @@ export interface StatsSummary {
 
 export async function importFromUrl(url: string, subject?: string): Promise<Document> {
   const headers = await authHeaders();
-  const res = await fetch(`${API_URL}/documents/import-url`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ url, subject: subject?.trim() || null }),
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || "Error importando la URL");
+  try {
+    const res = await fetch(`${API_URL}/documents/import-url`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ url, subject: subject?.trim() || null }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.detail || "Error importando la URL");
+    }
+    return res.json();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    if (msg.toLowerCase().includes("failed to fetch")) {
+      throw new Error("No se pudo conectar con la API. Revisá NEXT_PUBLIC_API_URL y que el backend esté online en HTTPS.");
+    }
+    throw new Error(msg);
   }
-  return res.json();
 }
 
 export async function getStatsSummary(): Promise<StatsSummary> {
