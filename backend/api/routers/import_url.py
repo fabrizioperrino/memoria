@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 from typing import Optional
 from models.study_models import DocumentResponse, DocumentStatus
 from services.document_processor import process_text
@@ -30,17 +30,50 @@ async def import_from_url(
         raise HTTPException(status_code=400, detail="URL inválida. Debe empezar con http:// o https://")
 
     # ── Fetch de la página ────────────────────────────────────────────────────
+    browser_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Referer": "https://www.google.com/",
+    }
+
+    response = None
     try:
         async with httpx.AsyncClient(
             follow_redirects=True,
             timeout=20.0,
-            headers={"User-Agent": "Mozilla/5.0 (memorIA bot; study assistant)"},
+            headers=browser_headers,
         ) as client:
             response = await client.get(url)
-            response.raise_for_status()
+
+            # Algunas webs bloquean el primer request sin cookies/challenge.
+            # Intentamos fallback por espejo lector para evitar 403/401.
+            if response.status_code in (401, 403):
+                proxy_url = f"https://r.jina.ai/http://{url.replace('https://', '').replace('http://', '')}"
+                proxy_resp = await client.get(proxy_url)
+                if proxy_resp.is_success and len(proxy_resp.text or "") > 200:
+                    response = proxy_resp
+                else:
+                    response.raise_for_status()
+            else:
+                response.raise_for_status()
     except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="La página tardó demasiado en responder.")
     except httpx.HTTPStatusError as e:
+        if e.response.status_code in (401, 403):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "La web bloqueó el acceso (HTTP 403/401). "
+                    "Probá con otra URL pública o copiá el texto en 'Pegar texto'."
+                ),
+            )
         raise HTTPException(status_code=400, detail=f"No se pudo acceder a la URL: HTTP {e.response.status_code}")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"No se pudo acceder a la URL: {str(e)}")
