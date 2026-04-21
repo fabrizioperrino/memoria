@@ -94,7 +94,7 @@ export default function UploadPage() {
           ] as { id: Tab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => { setTab(id); setStep("idle"); }}
+              onClick={() => { setTab(id); }}
               disabled={uploading}
               className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
                 tab === id
@@ -139,7 +139,7 @@ export default function UploadPage() {
                   <p className="font-semibold text-white mb-1">{file.name}</p>
                   <p className="text-sm text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setFile(null); setStep("idle"); }}
+                    onClick={(e) => { e.stopPropagation(); setFile(null); }}
                     className="mt-3 flex items-center gap-1 text-xs text-gray-600 hover:text-gray-400 transition-colors active:scale-95"
                   >
                     <X size={12} /> Cambiar archivo
