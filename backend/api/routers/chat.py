@@ -42,6 +42,7 @@ async def chat_with_document(doc_id: str, body: ChatMessage, current_user=Depend
                 question=body.question,
                 document_content=content,
                 history=body.history,
+                doc_id=doc_id,
             ):
                 yield f"data: {json.dumps({'token': token})}\n\n"
             yield "data: [DONE]\n\n"

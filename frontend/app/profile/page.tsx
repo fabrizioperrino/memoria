@@ -141,7 +141,7 @@ export default function ProfilePage() {
       if (error) {
         toast.error("No se pudo guardar");
       } else {
-        toast.success("Guardado ✓");
+        toast.success("Cambios guardados");
         if (field === "full_name")  setFullName(value);
         if (field === "faculty")    setFaculty(value);
         if (field === "university") setUniversity(value);
@@ -198,7 +198,7 @@ export default function ProfilePage() {
           </div>
           <div>
             <p className="font-bold text-orange-300 text-base sm:text-lg">
-              🔥 {stats.study_streak} {stats.study_streak === 1 ? "día" : "días"} seguidos estudiando
+              {stats.study_streak} {stats.study_streak === 1 ? "día" : "días"} seguidos estudiando
             </p>
             <p className="text-xs text-orange-500/70 mt-0.5">¡Seguí así! La constancia es la clave.</p>
           </div>

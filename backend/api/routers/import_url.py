@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
 from models.study_models import DocumentResponse, DocumentStatus
 from services.document_processor import process_text
 from database.supabase_client import supabase
 from core.auth import get_current_user
+from api.routers.documents import _process_and_save, _base_doc
 import uuid as uuid_module
 from datetime import datetime
 
@@ -18,6 +19,7 @@ class ImportUrlRequest(BaseModel):
 
 @router.post("/import-url", response_model=DocumentResponse)
 async def import_from_url(
+    background_tasks: BackgroundTasks,
     body: ImportUrlRequest,
     current_user=Depends(get_current_user),
 ):
@@ -121,32 +123,14 @@ async def import_from_url(
             detail="No se encontró suficiente texto en esa URL. Probá con otra página o usá 'Pegar texto'."
         )
 
-    # ── Procesar con IA ───────────────────────────────────────────────────────
-    doc_id = str(uuid_module.uuid4())
+    # ── Insertar inmediatamente y procesar en background ─────────────────────
+    doc_id  = str(uuid_module.uuid4())
+    clipped = clean_text[:100000]
+    data    = _base_doc(doc_id, current_user.id, page_title, url, "url", body.subject)
+    # Guardamos el texto crudo ya disponible; el contenido IA llegará en background
+    data["content"] = clipped
 
-    try:
-        study_material, _ = await process_text(clean_text)
+    supabase.table("documents").insert(data).execute()
+    background_tasks.add_task(_process_and_save, doc_id, current_user.id, process_text, clipped)
 
-        data = {
-            "id":             doc_id,
-            "user_id":        current_user.id,
-            "title":          page_title,
-            "file_name":      url,
-            "file_type":      "text",
-            "status":         DocumentStatus.READY,
-            "subject":        body.subject or None,
-            "content":        clean_text[:100000],
-            "summary":        study_material.summary,
-            "flashcards":     [fc.model_dump() for fc in study_material.flashcards],
-            "exam_questions": [q.model_dump()  for q  in study_material.exam_questions],
-            "key_concepts":   [kc.model_dump() for kc in study_material.key_concepts],
-            "created_at":     datetime.utcnow().isoformat(),
-        }
-
-        supabase.table("documents").insert(data).execute()
-        return DocumentResponse(**data)
-
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error procesando el contenido: {str(e)}")
+    return DocumentResponse(**data)

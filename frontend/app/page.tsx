@@ -37,6 +37,7 @@ import {
   AlertCircle,
   Loader2,
   Globe,
+  CalendarDays,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -148,7 +149,7 @@ export default function Dashboard() {
         fresh.forEach((fd) => {
           const old = prev.find((d) => d.id === fd.id);
           if (old?.status === "processing" && fd.status === "ready") {
-            toast.success(`"${fd.title}" ya está listo 🎉`);
+            toast.success(`"${fd.title}" ya está listo`);
           }
         });
         return fresh;
@@ -199,7 +200,7 @@ export default function Dashboard() {
         setDocuments((prev) =>
           prev.map((d) => d.id === doc.id ? { ...d, share_token } : d)
         );
-        toast.success("¡Link copiado al portapapeles! 🔗");
+        toast.success("Link copiado al portapapeles");
       }
     } catch {
       toast.error("Error al compartir");
@@ -218,7 +219,7 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-4xl font-bold mb-1">
-              Hola, {(user?.user_metadata?.full_name as string)?.split(" ")[0] || user?.email?.split("@")[0]} 👋
+              Hola, {(user?.user_metadata?.full_name as string)?.split(" ")[0] || user?.email?.split("@")[0]}
             </h1>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <p className="text-gray-500 text-sm sm:text-base">Tu progreso de estudio en un vistazo.</p>
@@ -229,12 +230,20 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-          <Link
-            href="/upload"
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20 active:scale-[0.98] w-full sm:w-auto"
-          >
-            <Upload size={15} /> Subir material
-          </Link>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Link
+              href="/plan"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all active:scale-[0.98]"
+            >
+              <CalendarDays size={15} /> Plan
+            </Link>
+            <Link
+              href="/upload"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20 active:scale-[0.98]"
+            >
+              <Upload size={15} /> Subir material
+            </Link>
+          </div>
         </div>
 
         {loading ? (
@@ -481,11 +490,11 @@ export default function Dashboard() {
                             {new Date(doc.created_at).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
                           </span>
                           <span className="text-xs text-gray-600">•</span>
-                          <span className="text-xs text-gray-500">🃏 {doc.flashcards?.length || 0} flashcards</span>
+                          <span className="text-xs text-gray-500">{doc.flashcards?.length || 0} flashcards</span>
                           <span className="text-xs text-gray-600">•</span>
-                          <span className="text-xs text-gray-500">📝 {doc.exam_questions?.length || 0} preguntas</span>
+                          <span className="text-xs text-gray-500">{doc.exam_questions?.length || 0} preguntas</span>
                           <span className="text-xs text-gray-600">•</span>
-                          <span className="text-xs text-gray-500">🔑 {doc.key_concepts?.length || 0} conceptos</span>
+                          <span className="text-xs text-gray-500">{doc.key_concepts?.length || 0} conceptos</span>
                         </div>
                       </div>
 

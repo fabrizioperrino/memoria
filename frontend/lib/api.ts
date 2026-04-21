@@ -288,3 +288,75 @@ export async function getStatsSummary(): Promise<StatsSummary> {
   if (!res.ok) throw new Error("Error obteniendo estadísticas");
   return res.json();
 }
+
+// ─── Exam IA ──────────────────────────────────────────────────────────────────
+
+export interface AnswerEvaluation {
+  score: number;           // 1–10
+  feedback: string;
+  follow_up_questions: string[];
+}
+
+// ─── Study Plan ───────────────────────────────────────────────────────────────
+
+export interface StudyTask {
+  type: "review" | "quiz" | "exam" | "study";
+  description: string;
+  document_title: string;
+  estimated_minutes: number;
+}
+
+export interface DayPlan {
+  day_label: string;
+  date: string;
+  tasks: StudyTask[];
+  total_minutes: number;
+}
+
+export interface StudyPlan {
+  summary: string;
+  focus_areas: string[];
+  daily_plan: DayPlan[];
+}
+
+export async function generateStudyPlan(
+  examDate: string,
+  dailyMinutes: number,
+): Promise<StudyPlan> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/study-plan/generate`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ exam_date: examDate, daily_minutes: dailyMinutes }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error generando el plan");
+  }
+  return res.json();
+}
+
+// ─── Exam IA ──────────────────────────────────────────────────────────────────
+
+export async function evaluateAnswer(
+  docId: string,
+  question: string,
+  studentAnswer: string,
+  expectedAnswer?: string,
+): Promise<AnswerEvaluation> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/exam/${docId}/evaluate`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      question,
+      student_answer: studentAnswer,
+      expected_answer: expectedAnswer ?? "",
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error evaluando la respuesta");
+  }
+  return res.json();
+}

@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str
     SUPABASE_JWT_SECRET: str = ""   # opcional — solo para tokens legacy HS256
 
+    # OpenAI — solo para embeddings RAG (text-embedding-3-small)
+    # Si no está configurado, el chat usa el documento completo como contexto
+    OPENAI_API_KEY: str = ""
+
     # CORS: lista de orígenes separados por coma.
     # Ej: "http://localhost:3000,https://memoria-app.vercel.app"
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:3001"

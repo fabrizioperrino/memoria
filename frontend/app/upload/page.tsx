@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { uploadDocument, uploadText, importFromUrl } from "@/lib/api";
 import { toast, Toaster } from "sonner";
-import { Upload, FileText, Image, X, Sparkles, CheckCircle2, AlignLeft, Paperclip, Globe, Link } from "lucide-react";
+import { Upload, FileText, Image, X, Sparkles, AlignLeft, Paperclip, Globe, Link } from "lucide-react";
 
 const ACCEPTED = ".pdf,image/jpeg,image/png,image/webp";
 
@@ -29,8 +29,6 @@ export default function UploadPage() {
   // ── Compartido ───────────────────────────────────────────────────────────
   const [subject,   setSubject]   = useState("");
   const [uploading, setUploading] = useState(false);
-  const [step,      setStep]      = useState<"idle" | "uploading" | "processing" | "done">("idle");
-  const [slowWarning, setSlowWarning] = useState(false);
 
   // ── Handlers archivo ─────────────────────────────────────────────────────
   const handleFile = (f: File) => setFile(f);
@@ -49,10 +47,6 @@ export default function UploadPage() {
     if (tab === "url"  && !urlValue.trim()) return;
 
     setUploading(true);
-    setSlowWarning(false);
-    setStep("uploading");
-    setTimeout(() => setStep("processing"), 1500);
-    const slowTimer = setTimeout(() => setSlowWarning(true), 40_000);
 
     try {
       let doc;
@@ -63,22 +57,15 @@ export default function UploadPage() {
       } else {
         doc = await importFromUrl(urlValue.trim(), subject);
       }
-      clearTimeout(slowTimer);
-      setStep("done");
-      toast.success("¡Material procesado! 🎉");
-      setTimeout(() => router.push(`/study/${doc.id}`), 900);
+      router.push(`/study/${doc.id}`);
     } catch (err: unknown) {
-      clearTimeout(slowTimer);
-      setStep("idle");
-      setSlowWarning(false);
       const message = err instanceof Error ? err.message : "Error desconocido";
       toast.error(message);
-    } finally {
       setUploading(false);
     }
   };
 
-  const isPdf = file?.type === "application/pdf";
+  const isPdf     = file?.type === "application/pdf";
   const canSubmit = !uploading && (
     (tab === "file" && !!file) ||
     (tab === "text" && !!textTitle.trim() && !!textContent.trim()) ||
@@ -257,49 +244,6 @@ export default function UploadPage() {
           />
         </div>
 
-        {/* Slow warning */}
-        {slowWarning && (
-          <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-300 flex items-center gap-2">
-            <span>⏳</span>
-            <span>El modelo está tardando un poco más de lo usual. Podés seguir esperando, no cerrés la página.</span>
-          </div>
-        )}
-
-        {/* Steps indicator */}
-        {uploading && (
-          <div className="mt-6 rounded-2xl border border-white/5 bg-white/[0.03] p-5">
-            <div className="flex flex-col gap-3">
-              {[
-                { id: "uploading",  label: tab === "file" ? "Subiendo archivo..." : tab === "url" ? "Accediendo a la URL..." : "Enviando texto..." },
-                { id: "processing", label: "Groq está analizando el contenido..." },
-                { id: "done",       label: "¡Generando material de estudio!" },
-              ].map((s) => {
-                const steps = ["uploading", "processing", "done"];
-                const currentIdx = steps.indexOf(step);
-                const isActive = s.id === step;
-                const isDone = steps.indexOf(s.id) < currentIdx;
-                return (
-                  <div key={s.id} className={`flex items-center gap-3 transition-all ${!isActive && !isDone ? "opacity-30" : ""}`}>
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all
-                      ${isDone ? "bg-emerald-500" : isActive ? "bg-violet-500" : "bg-white/10"}`}
-                    >
-                      {isDone
-                        ? <CheckCircle2 size={12} className="text-white" />
-                        : isActive
-                          ? <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                          : <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-                      }
-                    </div>
-                    <span className={`text-sm ${isActive ? "text-white font-medium" : isDone ? "text-emerald-400" : "text-gray-600"}`}>
-                      {s.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Botón */}
         <button
           disabled={!canSubmit}
@@ -325,7 +269,7 @@ export default function UploadPage() {
 
         {/* Info chips */}
         <div className="mt-5 flex flex-wrap gap-2 justify-center">
-          {["📄 Resumen automático", "🃏 Flashcards", "📝 Preguntas de examen", "🔑 Conceptos clave"].map((chip) => (
+          {["Resumen automático", "Flashcards", "Preguntas de examen", "Conceptos clave"].map((chip) => (
             <span key={chip} className="px-3 py-1 rounded-full text-xs text-gray-500 border border-white/5 bg-white/[0.02]">
               {chip}
             </span>

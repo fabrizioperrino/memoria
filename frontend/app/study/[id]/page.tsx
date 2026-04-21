@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { getDocument, getQuizHistory, Document, QuizResult } from "@/lib/api";
 import Link from "next/link";
-import { ArrowLeft, RotateCcw, CheckCircle2, ChevronRight, BookOpen, Layers, Key, FileText, MessageSquare, Target, TrendingUp } from "lucide-react";
+import { ArrowLeft, RotateCcw, CheckCircle2, ChevronRight, BookOpen, Layers, Key, FileText, MessageSquare, Target, TrendingUp, AlertCircle, Brain } from "lucide-react";
 
 type Tab = "summary" | "flashcards" | "exam" | "concepts";
+
+const POLL_INTERVAL_MS = 3000;
 
 export default function StudyPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,18 +18,89 @@ export default function StudyPage() {
   const [flipped, setFlipped] = useState<Record<number, boolean>>({});
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const [quizHistory, setQuizHistory] = useState<QuizResult[]>([]);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    getDocument(id).then(setDoc).finally(() => setLoading(false));
-    getQuizHistory(id).then(setQuizHistory).catch(() => {});
+    getDocument(id)
+      .then((d) => {
+        setDoc(d);
+        if (d.status === "processing") startPolling();
+        else getQuizHistory(id).then(setQuizHistory).catch(() => {});
+      })
+      .finally(() => setLoading(false));
+
+    return () => stopPolling();
   }, [id]);
+
+  function startPolling() {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const fresh = await getDocument(id);
+        setDoc(fresh);
+        if (fresh.status !== "processing") {
+          stopPolling();
+          if (fresh.status === "ready") {
+            getQuizHistory(id).then(setQuizHistory).catch(() => {});
+          }
+        }
+      } catch {
+        stopPolling();
+      }
+    }, POLL_INTERVAL_MS);
+  }
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
 
   if (loading) return (
     <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center">
       <div className="w-6 h-6 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
     </div>
   );
-  if (!doc) return <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center text-gray-500">Documento no encontrado</div>;
+
+  if (!doc) return (
+    <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center text-gray-500">
+      Documento no encontrado
+    </div>
+  );
+
+  // ── Estado: procesando ───────────────────────────────────────────────────────
+  if (doc.status === "processing") return (
+    <main className="min-h-screen bg-[#0f0f13] flex items-center justify-center px-6">
+      <div className="max-w-sm w-full text-center">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors mb-10">
+          <ArrowLeft size={14} /> Volver al inicio
+        </Link>
+        <div className="w-16 h-16 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto mb-6">
+          <div className="w-6 h-6 rounded-full border-2 border-violet-400 border-t-transparent animate-spin" />
+        </div>
+        <h2 className="text-xl font-bold mb-2">{doc.title}</h2>
+        <p className="text-gray-400 text-sm mb-1">La IA está generando tu material de estudio.</p>
+        <p className="text-gray-600 text-xs">Esto puede tardar entre 20 y 60 segundos según el tamaño del documento.</p>
+      </div>
+    </main>
+  );
+
+  // ── Estado: error ────────────────────────────────────────────────────────────
+  if (doc.status === "error") return (
+    <main className="min-h-screen bg-[#0f0f13] flex items-center justify-center px-6">
+      <div className="max-w-sm w-full text-center">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors mb-10">
+          <ArrowLeft size={14} /> Volver al inicio
+        </Link>
+        <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
+          <AlertCircle size={28} className="text-red-400" />
+        </div>
+        <h2 className="text-xl font-bold mb-2">No se pudo procesar</h2>
+        <p className="text-gray-400 text-sm">Hubo un error al generar el material. Intentá subir el documento de nuevo.</p>
+      </div>
+    </main>
+  );
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; count?: number }[] = [
     { id: "summary", label: "Resumen", icon: <FileText size={15} /> },
@@ -48,7 +121,7 @@ export default function StudyPage() {
             </Link>
             <h1 className="text-2xl font-bold">{doc.title}</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link
               href={`/chat/${id}`}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all"
@@ -62,10 +135,16 @@ export default function StudyPage() {
               <Target size={15} /> Quiz
             </Link>
             <Link
+              href={`/exam/${id}`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all"
+            >
+              <Brain size={15} /> Examen IA
+            </Link>
+            <Link
               href={`/review/${id}`}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
             >
-              <RotateCcw size={15} /> Repasar SM-2
+              <RotateCcw size={15} /> Repasar
             </Link>
           </div>
         </div>

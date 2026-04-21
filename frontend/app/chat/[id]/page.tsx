@@ -114,7 +114,7 @@ export default function ChatPage() {
         const updated = [...prev];
         updated[updated.length - 1] = {
           role: "assistant",
-          content: `❌ ${message}`,
+          content: `Error: ${message}`,
           loading: false,
         };
         return updated;
@@ -150,7 +150,7 @@ export default function ChatPage() {
         </div>
         <div className="ml-auto flex items-center gap-1.5 text-xs text-gray-600">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          Groq · Llama 3.3 70b
+          Asistente IA
         </div>
       </div>
 

@@ -451,7 +451,7 @@ export default function QuizPage() {
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium hover:bg-emerald-500/20 transition-all"
               >
-                ✓ Sí, lo sabía
+                Sí, lo sabía
               </button>
               <button
                 onClick={() => {
@@ -469,7 +469,7 @@ export default function QuizPage() {
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/20 transition-all"
               >
-                ✗ No lo sabía
+                No lo sabía
               </button>
             </div>
           )}

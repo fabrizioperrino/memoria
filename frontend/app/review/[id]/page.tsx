@@ -9,11 +9,11 @@ import { ArrowLeft, Trophy, Flame } from "lucide-react";
 
 type Rating = "forgot" | "hard" | "medium" | "easy";
 
-const RATINGS: { value: Rating; label: string; emoji: string; color: string; border: string }[] = [
-  { value: "forgot", label: "No supe", emoji: "😵", color: "bg-red-500/10 hover:bg-red-500/20 text-red-400", border: "border-red-500/20 hover:border-red-500/40" },
-  { value: "hard", label: "Difícil", emoji: "😓", color: "bg-orange-500/10 hover:bg-orange-500/20 text-orange-400", border: "border-orange-500/20 hover:border-orange-500/40" },
-  { value: "medium", label: "Regular", emoji: "🙂", color: "bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400", border: "border-yellow-500/20 hover:border-yellow-500/40" },
-  { value: "easy", label: "Fácil", emoji: "😎", color: "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400", border: "border-emerald-500/20 hover:border-emerald-500/40" },
+const RATINGS: { value: Rating; label: string; dot: string; color: string; border: string }[] = [
+  { value: "forgot", label: "No supe",  dot: "bg-red-500",    color: "bg-red-500/10 hover:bg-red-500/20 text-red-400",       border: "border-red-500/20 hover:border-red-500/40"    },
+  { value: "hard",   label: "Difícil",  dot: "bg-orange-500", color: "bg-orange-500/10 hover:bg-orange-500/20 text-orange-400", border: "border-orange-500/20 hover:border-orange-500/40" },
+  { value: "medium", label: "Regular",  dot: "bg-yellow-500", color: "bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400", border: "border-yellow-500/20 hover:border-yellow-500/40" },
+  { value: "easy",   label: "Fácil",    dot: "bg-emerald-500",color: "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400", border: "border-emerald-500/20 hover:border-emerald-500/40" },
 ];
 
 export default function ReviewPage() {
@@ -163,7 +163,7 @@ export default function ReviewPage() {
               disabled={rating}
               className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border text-sm font-medium transition-all ${r.color} ${r.border}`}
             >
-              <span className="text-xl">{r.emoji}</span>
+              <span className={`w-2 h-2 rounded-full ${r.dot}`} />
               <span className="text-xs">{r.label}</span>
             </button>
           ))}
