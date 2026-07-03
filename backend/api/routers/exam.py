@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from database.supabase_client import supabase
 from services.exam_service import evaluate_answer, AnswerEvaluation
+from services.gamification import award_xp, XP_EXAM_ANSWER, XP_EXAM_BONUS
 from core.auth import get_current_user
 
 router = APIRouter(prefix="/exam", tags=["exam"])
@@ -41,6 +42,10 @@ async def evaluate_exam_answer(
             student_answer=body.student_answer,
             expected_answer=body.expected_answer,
         )
-        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error evaluando la respuesta: {str(e)}")
+
+    amount = XP_EXAM_ANSWER + (XP_EXAM_BONUS if result.score >= 8 else 0)
+    award_xp(current_user.id, kind="exam", amount=amount, doc_id=doc_id, meta={"score": result.score})
+
+    return result

@@ -3,6 +3,7 @@ from models.study_models import Flashcard, FlashcardReview
 from services.spaced_repetition import update_flashcard, get_cards_due
 from database.supabase_client import supabase
 from core.auth import get_current_user
+from services.gamification import award_xp, XP_REVIEW_CARD
 
 router = APIRouter(prefix="/review", tags=["review"])
 
@@ -57,6 +58,8 @@ async def rate_flashcard(doc_id: str, review: FlashcardReview, current_user=Depe
             fc["next_review"] = fc["next_review"].isoformat()
 
     supabase.table("documents").update({"flashcards": flashcards_data}).eq("id", doc_id).execute()
+
+    award_xp(current_user.id, kind="review", amount=XP_REVIEW_CARD, doc_id=doc_id, meta={"rating": str(review.rating)})
 
     return {
         "message":       "Flashcard actualizada.",

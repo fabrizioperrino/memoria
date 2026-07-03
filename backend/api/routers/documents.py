@@ -4,6 +4,7 @@ from typing import Optional
 from models.study_models import DocumentResponse, DocumentStatus
 from services.document_processor import process_pdf, process_image, process_text
 from services.rag_service import store_document_chunks, rag_enabled
+from services.gamification import award_xp, XP_UPLOAD
 from database.supabase_client import supabase
 from core.auth import get_current_user
 import uuid as uuid_module
@@ -33,6 +34,8 @@ async def _process_and_save(doc_id: str, user_id: str, process_fn, *args):
             "exam_questions": [q.model_dump()  for q  in study_material.exam_questions],
             "key_concepts":   [kc.model_dump() for kc in study_material.key_concepts],
         }).eq("id", doc_id).execute()
+
+        award_xp(user_id, kind="upload", amount=XP_UPLOAD, doc_id=doc_id)
 
         # Generar embeddings para RAG si OpenAI está configurado
         if rag_enabled() and raw_text:

@@ -360,3 +360,134 @@ export async function evaluateAnswer(
   }
   return res.json();
 }
+
+// ─── Progreso y gamificación ──────────────────────────────────────────────────
+
+export interface HeatmapDay {
+  date: string;
+  count: number;
+}
+
+export interface SubjectAccuracy {
+  subject: string;
+  attempts: number;
+  avg_pct: number;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  unlocked: boolean;
+  unlocked_at: string | null;
+}
+
+export interface ProgressSummary {
+  xp_total: number;
+  level: number;
+  level_xp_floor: number;
+  next_level_xp: number;
+  streak: number;
+  heatmap: HeatmapDay[];
+  heatmap_days: number;
+  subjects: SubjectAccuracy[];
+  achievements: Achievement[];
+  totals: { documents: number; quizzes: number; reviews: number };
+}
+
+export async function getProgressSummary(): Promise<ProgressSummary> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/progress/summary`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error cargando el progreso");
+  }
+  return res.json();
+}
+
+// ─── Grupos ───────────────────────────────────────────────────────────────────
+
+export interface Group {
+  id: string;
+  name: string;
+  code: string;
+  created_by: string;
+  created_at: string;
+  member_count: number;
+  is_owner: boolean;
+}
+
+export interface GroupRankingEntry {
+  user_id: string;
+  display_name: string;
+  xp_week: number;
+  xp_total: number;
+  is_you: boolean;
+}
+
+export interface GroupDetail extends Group {
+  ranking: GroupRankingEntry[];
+}
+
+export async function listGroups(): Promise<Group[]> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error cargando los grupos");
+  }
+  return res.json();
+}
+
+export async function createGroup(name: string, displayName?: string): Promise<Group> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ name, display_name: displayName ?? "" }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error creando el grupo");
+  }
+  return res.json();
+}
+
+export async function joinGroup(
+  code: string,
+  displayName?: string,
+): Promise<Group & { already_member: boolean }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/join`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ code, display_name: displayName ?? "" }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Código inválido");
+  }
+  return res.json();
+}
+
+export async function getGroup(groupId: string): Promise<GroupDetail> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/${groupId}`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error cargando el grupo");
+  }
+  return res.json();
+}
+
+export async function leaveGroup(groupId: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/${groupId}/leave`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error saliendo del grupo");
+  }
+}

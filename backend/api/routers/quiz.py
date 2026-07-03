@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from database.supabase_client import supabase
 from core.auth import get_current_user
+from services.gamification import award_xp, XP_QUIZ_BASE, XP_QUIZ_PER_CORRECT
 import uuid
 from datetime import datetime
 
@@ -64,6 +65,14 @@ async def save_quiz_result(body: SaveQuizRequest, current_user=Depends(get_curre
     response = supabase.table("quiz_results").insert(data).execute()
     if not response.data:
         raise HTTPException(status_code=500, detail="Error guardando el resultado.")
+
+    award_xp(
+        current_user.id,
+        kind="quiz",
+        amount=XP_QUIZ_BASE + XP_QUIZ_PER_CORRECT * body.score,
+        doc_id=body.doc_id,
+        meta={"percentage": percentage, "score": body.score, "total": body.total},
+    )
 
     return response.data[0]
 
