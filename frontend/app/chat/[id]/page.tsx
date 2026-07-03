@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { getDocument } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { ArrowLeft, Send, Bot, User, Sparkles } from "lucide-react";
+import { ArrowLeft, Send, Bot, User, MessageSquare } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -161,12 +161,12 @@ export default function ChatPage() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-6 pb-10">
             <div className="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center">
-              <Sparkles className="text-violet-400" size={28} />
+              <MessageSquare className="text-violet-400" size={28} />
             </div>
             <div>
               <h3 className="text-lg font-semibold mb-1">Preguntale a tus apuntes</h3>
               <p className="text-sm text-gray-500 max-w-sm">
-                La IA leyó todo el documento. Podés preguntarle lo que quieras sobre el contenido.
+                Las respuestas salen solo de tu documento. Si algo no está en el apunte, te lo dice.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center max-w-lg">

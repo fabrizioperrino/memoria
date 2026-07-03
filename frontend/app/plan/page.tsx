@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { generateStudyPlan, StudyPlan, DayPlan, StudyTask } from "@/lib/api";
-import { ArrowLeft, CalendarDays, Clock, RotateCcw, Target, Brain, BookOpen, Sparkles } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock, RotateCcw, Target, Brain, BookOpen } from "lucide-react";
 
 const TASK_META: Record<string, { icon: React.ElementType; color: string; label: string }> = {
   review: { icon: RotateCcw, color: "text-amber-400",   label: "Repaso SM-2" },
@@ -178,7 +178,7 @@ export default function PlanPage() {
           >
             {loading
               ? <><div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Generando plan...</>
-              : <><Sparkles size={16} /> Generar plan</>
+              : <><CalendarDays size={16} /> Generar plan</>
             }
           </button>
         </div>
@@ -219,7 +219,7 @@ export default function PlanPage() {
               disabled={loading}
               className="w-full py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all flex items-center justify-center gap-2"
             >
-              <Sparkles size={15} /> Regenerar plan
+              <RotateCcw size={15} /> Regenerar plan
             </button>
           </div>
         )}

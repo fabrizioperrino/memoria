@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { uploadDocument, uploadText, importFromUrl } from "@/lib/api";
 import { toast, Toaster } from "sonner";
-import { Upload, FileText, Image, X, Sparkles, AlignLeft, Paperclip, Globe, Link } from "lucide-react";
+import { Upload, FileText, Image, X, Layers, AlignLeft, Paperclip, Globe, Link } from "lucide-react";
 
 const ACCEPTED = ".pdf,image/jpeg,image/png,image/webp";
 
@@ -261,7 +261,7 @@ export default function UploadPage() {
             </>
           ) : (
             <>
-              <Sparkles size={16} />
+              <Layers size={16} />
               Generar material de estudio
             </>
           )}
