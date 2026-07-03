@@ -28,9 +28,9 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Rutas públicas (no requieren auth)
+  // Rutas públicas (no requieren auth). "/" muestra la landing a visitantes.
   const publicRoutes = ["/auth", "/share"];
-  const isPublic = publicRoutes.some((r) => pathname.startsWith(r));
+  const isPublic = pathname === "/" || publicRoutes.some((r) => pathname.startsWith(r));
 
   // Si no está autenticado y la ruta no es pública → redirigir a /auth
   if (!user && !isPublic) {
@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Si está autenticado e intenta ir a /auth → redirigir al dashboard
-  if (user && isPublic) {
+  if (user && pathname.startsWith("/auth")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

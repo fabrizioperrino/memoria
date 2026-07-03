@@ -7,8 +7,9 @@ import NavBar from "@/components/NavBar";
 const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "memorIA — Tu compañero de estudio inteligente",
-  description: "Subí tus apuntes y generá flashcards, resúmenes y preguntas de examen con IA",
+  title: "memorIA — Estudiá con memoria",
+  description:
+    "Subí tus apuntes y convertilos en flashcards, exámenes y un plan de estudio que sabe qué aprendiste — y qué estás por olvidar.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -19,7 +19,6 @@ import {
   BookOpen,
   Trash2,
   ChevronRight,
-  Sparkles,
   Clock,
   Target,
   TrendingUp,
@@ -40,6 +39,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import Landing from "@/components/Landing";
 
 // ── Sparkline chart ────────────────────────────────────────────────────────────
 function ScoreSparkline({ data }: { data: QuizChartPoint[] }) {
@@ -117,7 +117,23 @@ function DocIcon({ type }: { type: string | null }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export default function Dashboard() {
+// ── Home: landing para visitantes, dashboard para usuarios ────────────────────
+export default function Home() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <main className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <Loader2 className="animate-spin text-violet-500" size={28} />
+      </main>
+    );
+  }
+
+  if (!user) return <Landing />;
+  return <Dashboard />;
+}
+
+function Dashboard() {
   const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [stats,     setStats]     = useState<StatsSummary | null>(null);
@@ -420,7 +436,7 @@ export default function Dashboard() {
               {documents.length === 0 ? (
                 <div className="rounded-2xl border border-white/5 border-dashed bg-white/[0.02] flex flex-col items-center justify-center py-20 text-center">
                   <div className="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center mb-4">
-                    <Sparkles className="text-violet-400" size={28} />
+                    <Upload className="text-violet-400" size={28} />
                   </div>
                   <h3 className="text-lg font-semibold mb-1">Todavía no subiste nada</h3>
                   <p className="text-gray-500 text-sm mb-6">Subí un PDF, foto de cuaderno o pegá texto para empezar</p>
