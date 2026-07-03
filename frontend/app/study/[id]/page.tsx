@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { getDocument, getQuizHistory, Document, QuizResult } from "@/lib/api";
 import Link from "next/link";
-import { ArrowLeft, RotateCcw, CheckCircle2, ChevronRight, BookOpen, Layers, Key, FileText, MessageSquare, Target, TrendingUp, AlertCircle, Brain } from "lucide-react";
+import { ArrowLeft, RotateCcw, CheckCircle2, ChevronRight, BookOpen, Layers, Key, FileText, MessageSquare, Target, TrendingUp, AlertCircle, Brain, Siren } from "lucide-react";
 
 type Tab = "summary" | "flashcards" | "exam" | "concepts";
 
@@ -145,6 +145,13 @@ export default function StudyPage() {
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
             >
               <RotateCcw size={15} /> Repasar
+            </Link>
+            <Link
+              href={`/cram/${id}`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/25 text-red-300 hover:bg-red-500/20 text-sm font-medium transition-all"
+              title="Repaso intensivo de última hora: lo que más te cuesta"
+            >
+              <Siren size={15} /> Rindo mañana
             </Link>
           </div>
         </div>

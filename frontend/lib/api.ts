@@ -491,3 +491,38 @@ export async function leaveGroup(groupId: string): Promise<void> {
     throw new Error(err.detail || "Error saliendo del grupo");
   }
 }
+
+// ─── Índice "¿Estoy listo?" ───────────────────────────────────────────────────
+
+export interface DocReadiness {
+  doc_id: string;
+  title: string;
+  subject: string;
+  readiness: number;
+  retention: number;
+  accuracy: number;
+  coverage: number;
+  total_cards: number;
+}
+
+export interface SubjectReadiness {
+  subject: string;
+  readiness: number;
+  docs: DocReadiness[];
+}
+
+export interface ReadinessSummary {
+  overall: number;
+  subjects: SubjectReadiness[];
+  weakest: DocReadiness[];
+}
+
+export async function getReadiness(): Promise<ReadinessSummary> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/progress/readiness`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Error cargando el índice de preparación");
+  }
+  return res.json();
+}

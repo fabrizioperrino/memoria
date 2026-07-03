@@ -18,6 +18,14 @@ router = APIRouter(prefix="/progress", tags=["progress"])
 
 HEATMAP_DAYS = 182  # ~26 semanas
 
+# ── Índice "¿Estoy listo?" ─────────────────────────────────────────────────────
+# Pesos de la fórmula: readiness = retención + precisión + cobertura
+READINESS_W_RETENTION = 0.45   # madurez SM-2 de las cartas
+READINESS_W_ACCURACY = 0.35    # precisión en quizzes recientes
+READINESS_W_COVERAGE = 0.20    # cuánto del material fue practicado
+MATURE_INTERVAL_DAYS = 21      # una carta con intervalo de 21+ días se considera madura
+RECENT_QUIZZES = 5             # quizzes que cuentan para la precisión
+
 
 def _parse_date(value: str):
     try:
@@ -177,4 +185,120 @@ async def get_progress_summary(current_user=Depends(get_current_user)):
             "quizzes": len(quiz_results),
             "reviews": total_reviews,
         },
+    }
+
+
+def _doc_readiness(flashcards: list, doc_quizzes: list) -> dict:
+    """Calcula los tres componentes del índice para un documento."""
+    cards = flashcards or []
+    total_cards = len(cards)
+
+    # Retención: madurez SM-2 promedio (cartas nunca repasadas = 0)
+    if total_cards:
+        maturity_sum = 0.0
+        reviewed = 0
+        for fc in cards:
+            reps = fc.get("repetitions") or 0
+            if reps > 0:
+                reviewed += 1
+                interval = fc.get("interval") or 0
+                maturity_sum += min(interval / MATURE_INTERVAL_DAYS, 1.0)
+        retention = maturity_sum / total_cards
+        coverage_cards = reviewed / total_cards
+    else:
+        retention = 0.0
+        coverage_cards = 0.0
+
+    # Precisión: promedio de los últimos N quizzes
+    recent = sorted(doc_quizzes, key=lambda r: r.get("created_at") or "", reverse=True)[:RECENT_QUIZZES]
+    accuracy = (sum((r.get("percentage") or 0) for r in recent) / len(recent) / 100) if recent else 0.0
+
+    # Cobertura: cartas practicadas + haber hecho al menos ~3 quizzes
+    coverage = coverage_cards * 0.6 + min(len(doc_quizzes), 3) / 3 * 0.4
+
+    readiness = round(100 * (
+        READINESS_W_RETENTION * retention
+        + READINESS_W_ACCURACY * accuracy
+        + READINESS_W_COVERAGE * coverage
+    ))
+    return {
+        "readiness": readiness,
+        "retention": round(retention * 100),
+        "accuracy": round(accuracy * 100),
+        "coverage": round(coverage * 100),
+        "total_cards": total_cards,
+    }
+
+
+@router.get("/readiness")
+async def get_readiness(current_user=Depends(get_current_user)):
+    """
+    Índice "¿Estoy listo?" por materia y por documento.
+    100% dato, sin IA: madurez SM-2 + precisión de quizzes + cobertura.
+    """
+    uid = current_user.id
+
+    docs_resp = (
+        supabase.table("documents")
+        .select("id, title, subject, status, flashcards")
+        .eq("user_id", uid)
+        .eq("status", "ready")
+        .execute()
+    )
+    docs = docs_resp.data or []
+
+    quiz_resp = (
+        supabase.table("quiz_results")
+        .select("doc_id, percentage, created_at")
+        .eq("user_id", uid)
+        .execute()
+    )
+    quizzes_by_doc: dict[str, list] = {}
+    for r in quiz_resp.data or []:
+        quizzes_by_doc.setdefault(r["doc_id"], []).append(r)
+
+    # Por documento
+    doc_scores = []
+    for doc in docs:
+        score = _doc_readiness(doc.get("flashcards"), quizzes_by_doc.get(doc["id"], []))
+        doc_scores.append({
+            "doc_id": doc["id"],
+            "title": doc["title"],
+            "subject": doc.get("subject") or "Sin materia",
+            **score,
+        })
+
+    # Por materia: promedio ponderado por cantidad de cartas
+    subjects: dict[str, dict] = {}
+    for ds in doc_scores:
+        s = subjects.setdefault(ds["subject"], {"weighted": 0.0, "weight": 0, "docs": []})
+        w = max(ds["total_cards"], 1)
+        s["weighted"] += ds["readiness"] * w
+        s["weight"] += w
+        s["docs"].append(ds)
+
+    subject_list = sorted(
+        (
+            {
+                "subject": name,
+                "readiness": round(s["weighted"] / s["weight"]) if s["weight"] else 0,
+                "docs": sorted(s["docs"], key=lambda d: d["readiness"]),
+            }
+            for name, s in subjects.items()
+        ),
+        key=lambda x: x["readiness"],
+    )
+
+    overall = round(sum(s["readiness"] for s in subject_list) / len(subject_list)) if subject_list else 0
+
+    # Puntos más flojos: documentos con menor readiness (con material)
+    weakest = sorted(
+        (d for d in doc_scores if d["total_cards"] > 0),
+        key=lambda d: d["readiness"],
+    )[:3]
+
+    return {
+        "overall": overall,
+        "subjects": subject_list,
+        "weakest": weakest,
     }

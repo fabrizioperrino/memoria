@@ -4,11 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   getProgressSummary,
+  getReadiness,
   ProgressSummary,
+  ReadinessSummary,
+  SubjectReadiness,
   Achievement,
 } from "@/lib/api";
 import { toast, Toaster } from "sonner";
 import {
+  AlertTriangle,
+  ChevronDown,
   FileText,
   Flame,
   GraduationCap,
@@ -19,6 +24,7 @@ import {
   Lock,
   Repeat,
   Star,
+  Target,
   TrendingUp,
   Trophy,
   Users,
@@ -137,6 +143,97 @@ function ActivityHeatmap({ data, days }: { data: { date: string; count: number }
   );
 }
 
+// ── Índice "¿Estás listo?" ─────────────────────────────────────────────────────
+function readinessColor(pct: number) {
+  if (pct >= 75) return { bar: "bg-emerald-500", text: "text-emerald-400" };
+  if (pct >= 45) return { bar: "bg-amber-500", text: "text-amber-400" };
+  return { bar: "bg-red-500", text: "text-red-400" };
+}
+
+function ReadinessGauge({ value }: { value: number }) {
+  // Arco semicircular: r=52, circunferencia media = π·r ≈ 163.4
+  const R = 52;
+  const HALF = Math.PI * R;
+  const filled = (value / 100) * HALF;
+  const color = value >= 75 ? "#34d399" : value >= 45 ? "#fbbf24" : "#f87171";
+  return (
+    <div className="relative h-[76px] w-[128px]">
+      <svg viewBox="0 0 128 76" className="h-full w-full">
+        <path
+          d="M 12 68 A 52 52 0 0 1 116 68"
+          fill="none"
+          stroke="rgba(255,255,255,0.07)"
+          strokeWidth="10"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 12 68 A 52 52 0 0 1 116 68"
+          fill="none"
+          stroke={color}
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={`${filled} ${HALF}`}
+          className="transition-all duration-700"
+        />
+      </svg>
+      <div className="absolute inset-x-0 bottom-0 text-center">
+        <span className="text-2xl font-bold">{value}%</span>
+      </div>
+    </div>
+  );
+}
+
+function SubjectReadinessRow({ s }: { s: SubjectReadiness }) {
+  const [open, setOpen] = useState(false);
+  const c = readinessColor(s.readiness);
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.015]">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <span className="truncate text-sm font-medium">{s.subject}</span>
+            <span className={`shrink-0 text-sm font-bold ${c.text}`}>{s.readiness}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${c.bar}`}
+              style={{ width: `${s.readiness}%` }}
+            />
+          </div>
+        </div>
+        <ChevronDown
+          size={15}
+          className={`shrink-0 text-gray-600 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-white/5 px-4 py-3">
+          {s.docs.map((d) => (
+            <div key={d.doc_id} className="flex items-center justify-between gap-3 text-xs">
+              <Link
+                href={`/study/${d.doc_id}`}
+                className="truncate text-gray-400 transition-colors hover:text-white"
+              >
+                {d.title}
+              </Link>
+              <div className="flex shrink-0 items-center gap-3 text-gray-600">
+                <span title="Retención: memoria a largo plazo (SM-2)">ret {d.retention}%</span>
+                <span title="Precisión en quizzes recientes">prec {d.accuracy}%</span>
+                <span className={`font-semibold ${readinessColor(d.readiness).text}`}>
+                  {d.readiness}%
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Tarjeta de logro ───────────────────────────────────────────────────────────
 function AchievementCard({ a }: { a: Achievement }) {
   const Icon = ACHIEVEMENT_ICONS[a.id] ?? Star;
@@ -165,11 +262,18 @@ function AchievementCard({ a }: { a: Achievement }) {
 // ── Página ─────────────────────────────────────────────────────────────────────
 export default function ProgressPage() {
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getProgressSummary()
-      .then(setSummary)
+    Promise.all([
+      getProgressSummary(),
+      getReadiness().catch(() => null),
+    ])
+      .then(([s, r]) => {
+        setSummary(s);
+        setReadiness(r);
+      })
       .catch(() => toast.error("No se pudo cargar tu progreso"))
       .finally(() => setLoading(false));
   }, []);
@@ -215,6 +319,50 @@ export default function ProgressPage() {
           Grupos y rankings
         </Link>
       </div>
+
+      {/* ── ¿Estás listo? ── */}
+      {readiness && readiness.subjects.length > 0 && (
+        <div className="mb-5 rounded-2xl border border-white/8 bg-white/[0.02] p-5">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Target size={16} className="text-violet-400" />
+              <h2 className="text-sm font-semibold">¿Estás listo para rendir?</h2>
+            </div>
+            <span className="text-xs text-gray-600">
+              Retención (45%) + precisión (35%) + cobertura (20%)
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+            <div className="flex shrink-0 flex-col items-center gap-1 sm:px-4">
+              <ReadinessGauge value={readiness.overall} />
+              <span className="text-xs text-gray-500">preparación general</span>
+            </div>
+
+            <div className="min-w-0 flex-1 space-y-2">
+              {readiness.subjects.map((s) => (
+                <SubjectReadinessRow key={s.subject} s={s} />
+              ))}
+            </div>
+          </div>
+
+          {readiness.weakest.length > 0 && readiness.weakest[0].readiness < 60 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+              <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+              <span className="text-xs text-gray-400">
+                Tu punto más flojo:{" "}
+                <Link
+                  href={`/cram/${readiness.weakest[0].doc_id}`}
+                  className="font-medium text-amber-300 underline-offset-2 hover:underline"
+                >
+                  {readiness.weakest[0].title}
+                </Link>{" "}
+                ({readiness.weakest[0].readiness}%) — repasalo con el modo intensivo.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Nivel + racha + totales ── */}
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
