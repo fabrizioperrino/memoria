@@ -71,7 +71,9 @@ function ActivityHeatmap({ data, days }: { data: { date: string; count: number }
         cursor.setDate(cursor.getDate() + 1);
       }
       const firstDay = new Date(week[0].date);
-      if (firstDay.getMonth() !== lastMonth) {
+      const lastLabelIndex = monthLabels[monthLabels.length - 1]?.index ?? -4;
+      // Evitar etiquetas superpuestas: mínimo 3 semanas entre una y otra
+      if (firstDay.getMonth() !== lastMonth && weeks.length - lastLabelIndex >= 3) {
         lastMonth = firstDay.getMonth();
         monthLabels.push({
           index: weeks.length,

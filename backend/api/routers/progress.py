@@ -34,7 +34,9 @@ def _backfill_xp_events(uid: str, docs: list, quiz_results: list) -> list:
     """
     events = []
     for doc in docs:
-        if doc.get("created_at"):
+        # Solo documentos procesados: los que están en processing van a recibir
+        # su XP cuando terminen (evita duplicar el evento).
+        if doc.get("status") == "ready" and doc.get("created_at"):
             events.append({
                 "user_id": uid,
                 "kind": "upload",
@@ -68,7 +70,7 @@ async def get_progress_summary(current_user=Depends(get_current_user)):
     # ── Datos base ────────────────────────────────────────────────────────────
     docs_resp = (
         supabase.table("documents")
-        .select("id, title, subject, created_at")
+        .select("id, title, subject, status, created_at")
         .eq("user_id", uid)
         .execute()
     )
