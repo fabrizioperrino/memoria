@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import documents, review, chat, quiz, stats, import_url, exam, study_plan, progress, groups
+from api.routers import documents, review, chat, quiz, stats, import_url, exam, study_plan, progress, groups, duels
 from settings.config import settings
 
 app = FastAPI(
@@ -28,6 +28,7 @@ app.include_router(study_plan.router)
 app.include_router(stats.router)
 app.include_router(progress.router)
 app.include_router(groups.router)
+app.include_router(duels.router)
 
 
 @app.get("/")

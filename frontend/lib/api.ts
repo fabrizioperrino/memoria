@@ -546,3 +546,176 @@ export async function transcribeOralAnswer(docId: string, audio: Blob): Promise<
   const data = await res.json();
   return data.transcript as string;
 }
+
+// ─── Mazos compartidos ────────────────────────────────────────────────────────
+
+export interface GroupDeck {
+  id: string;
+  doc_id: string;
+  shared_by: string;
+  shared_by_name: string;
+  title: string;
+  created_at: string;
+  is_mine: boolean;
+}
+
+export interface SharedDeckMaterial {
+  id: string;
+  title: string;
+  summary: string | null;
+  flashcards: Flashcard[] | null;
+  exam_questions: ExamQuestion[] | null;
+  key_concepts: KeyConcept[] | null;
+  share_id: string;
+  group_id: string;
+}
+
+export async function listGroupDecks(groupId: string): Promise<GroupDeck[]> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/${groupId}/decks`, { headers });
+  if (!res.ok) throw new Error("Error cargando los mazos");
+  return res.json();
+}
+
+export async function shareDeck(groupId: string, docId: string): Promise<GroupDeck> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/${groupId}/decks`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ doc_id: docId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo compartir el mazo");
+  }
+  return res.json();
+}
+
+export async function getSharedDeck(shareId: string): Promise<SharedDeckMaterial> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/decks/${shareId}`, { headers });
+  if (!res.ok) throw new Error("Error cargando el mazo");
+  return res.json();
+}
+
+export async function unshareDeck(groupId: string, shareId: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/${groupId}/decks/${shareId}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo quitar el mazo");
+  }
+}
+
+// ─── Duelos ───────────────────────────────────────────────────────────────────
+
+export interface DuelListItem {
+  id: string;
+  title: string;
+  total: number;
+  created_at: string;
+  played_count: number;
+  my_score: number | null;
+  played: boolean;
+}
+
+export interface DuelQuestion {
+  question: string;
+  options: string[];
+}
+
+export interface DuelPlay {
+  id: string;
+  title: string;
+  group_id: string;
+  questions: DuelQuestion[];
+  total: number;
+  already_played: boolean;
+  my_score: number | null;
+}
+
+export interface DuelReviewItem {
+  question: string;
+  chosen: string;
+  correct_answer: string;
+  is_correct: boolean;
+  explanation: string;
+}
+
+export interface DuelSubmitResult {
+  score: number;
+  total: number;
+  review: DuelReviewItem[];
+}
+
+export interface DuelRankingEntry {
+  display_name: string;
+  score: number;
+  total: number;
+  created_at: string;
+  is_you: boolean;
+}
+
+export interface DuelResults {
+  id: string;
+  title: string;
+  total: number;
+  ranking: DuelRankingEntry[];
+}
+
+export async function listDuels(groupId: string): Promise<DuelListItem[]> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/${groupId}/duels`, { headers });
+  if (!res.ok) throw new Error("Error cargando los duelos");
+  return res.json();
+}
+
+export async function createDuel(
+  groupId: string,
+  docId: string,
+  title?: string,
+  numQuestions = 8,
+): Promise<{ id: string; title: string; total: number }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/${groupId}/duels`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ doc_id: docId, title: title ?? "", num_questions: numQuestions }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo crear el duelo");
+  }
+  return res.json();
+}
+
+export async function getDuel(duelId: string): Promise<DuelPlay> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/duels/${duelId}`, { headers });
+  if (!res.ok) throw new Error("Duelo no encontrado");
+  return res.json();
+}
+
+export async function submitDuel(duelId: string, answers: string[]): Promise<DuelSubmitResult> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/duels/${duelId}/submit`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ answers }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo enviar el duelo");
+  }
+  return res.json();
+}
+
+export async function getDuelResults(duelId: string): Promise<DuelResults> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/duels/${duelId}/results`, { headers });
+  if (!res.ok) throw new Error("Error cargando los resultados");
+  return res.json();
+}

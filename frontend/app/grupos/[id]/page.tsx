@@ -3,7 +3,20 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { getGroup, leaveGroup, GroupDetail } from "@/lib/api";
+import {
+  getGroup,
+  leaveGroup,
+  listDocuments,
+  listGroupDecks,
+  shareDeck,
+  unshareDeck,
+  listDuels,
+  createDuel,
+  GroupDetail,
+  Document,
+  GroupDeck,
+  DuelListItem,
+} from "@/lib/api";
 import { toast, Toaster } from "sonner";
 import {
   ArrowLeft,
@@ -11,33 +24,30 @@ import {
   Copy,
   Crown,
   Flame,
+  Layers,
   Loader2,
   LogOut,
   Medal,
+  Plus,
+  Swords,
+  Trash2,
   Trophy,
   Users,
   Zap,
 } from "lucide-react";
 
+type Tab = "ranking" | "mazos" | "duelos";
+
 function RankBadge({ position }: { position: number }) {
-  if (position === 1) {
+  const styles: Record<number, string> = {
+    1: "bg-amber-500/20 text-amber-400",
+    2: "bg-gray-400/15 text-gray-300",
+    3: "bg-orange-700/20 text-orange-400",
+  };
+  if (position <= 3) {
     return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
-        <Trophy size={15} />
-      </div>
-    );
-  }
-  if (position === 2) {
-    return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-400/15 text-gray-300">
-        <Medal size={15} />
-      </div>
-    );
-  }
-  if (position === 3) {
-    return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-700/20 text-orange-400">
-        <Medal size={15} />
+      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${styles[position]}`}>
+        {position === 1 ? <Trophy size={15} /> : <Medal size={15} />}
       </div>
     );
   }
@@ -48,21 +58,88 @@ function RankBadge({ position }: { position: number }) {
   );
 }
 
+// ── Selector de documento (para compartir mazo o crear duelo) ───────────────────
+function DocPicker({
+  label,
+  docs,
+  onPick,
+  onCancel,
+}: {
+  label: string;
+  docs: { id: string; title: string }[];
+  onPick: (docId: string) => void;
+  onCancel: () => void;
+}) {
+  if (docs.length === 0) {
+    return (
+      <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4 text-center text-sm text-gray-500">
+        No tenés documentos listos para esto.{" "}
+        <button onClick={onCancel} className="text-violet-400 hover:text-violet-300">Cerrar</button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 rounded-xl border border-violet-500/25 bg-violet-500/[0.05] p-3">
+      <p className="px-1 text-xs font-medium text-gray-400">{label}</p>
+      {docs.map((d) => (
+        <button
+          key={d.id}
+          onClick={() => onPick(d.id)}
+          className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-3.5 py-2.5 text-left text-sm text-gray-200 transition-colors hover:border-violet-500/40"
+        >
+          <span className="truncate">{d.title}</span>
+          <Plus size={14} className="shrink-0 text-violet-400" />
+        </button>
+      ))}
+      <button onClick={onCancel} className="w-full py-1 text-xs text-gray-500 hover:text-gray-300">
+        Cancelar
+      </button>
+    </div>
+  );
+}
+
 export default function GroupDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const groupId = params.id;
+
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [tab, setTab] = useState<Tab>("ranking");
+
+  const [decks, setDecks] = useState<GroupDeck[]>([]);
+  const [duels, setDuels] = useState<DuelListItem[]>([]);
+  const [myDocs, setMyDocs] = useState<Document[]>([]);
+
+  const [picker, setPicker] = useState<null | "share" | "duel">(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!params.id) return;
-    getGroup(params.id)
-      .then(setGroup)
+    if (!groupId) return;
+    Promise.all([
+      getGroup(groupId),
+      listGroupDecks(groupId).catch(() => []),
+      listDuels(groupId).catch(() => []),
+      listDocuments().catch(() => []),
+    ])
+      .then(([g, dk, du, docs]) => {
+        setGroup(g);
+        setDecks(dk);
+        setDuels(du);
+        setMyDocs(docs);
+      })
       .catch(() => toast.error("No se pudo cargar el grupo"))
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [groupId]);
+
+  async function refreshDecks() {
+    setDecks(await listGroupDecks(groupId).catch(() => decks));
+  }
+  async function refreshDuels() {
+    setDuels(await listDuels(groupId).catch(() => duels));
+  }
 
   async function copyCode() {
     if (!group) return;
@@ -76,16 +153,52 @@ export default function GroupDetailPage() {
   }
 
   async function handleLeave() {
-    if (!group) return;
-    if (!confirm(`¿Salir de "${group.name}"?`)) return;
+    if (!group || !confirm(`¿Salir de "${group.name}"?`)) return;
     setLeaving(true);
     try {
       await leaveGroup(group.id);
       toast.success("Saliste del grupo");
       router.push("/grupos");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo salir del grupo");
+      toast.error(e instanceof Error ? e.message : "No se pudo salir");
       setLeaving(false);
+    }
+  }
+
+  async function handleShare(docId: string) {
+    setBusy(true);
+    try {
+      await shareDeck(groupId, docId);
+      toast.success("Mazo compartido con el grupo");
+      setPicker(null);
+      await refreshDecks();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo compartir");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUnshare(shareId: string) {
+    if (!confirm("¿Quitar este mazo del grupo?")) return;
+    try {
+      await unshareDeck(groupId, shareId);
+      await refreshDecks();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo quitar");
+    }
+  }
+
+  async function handleCreateDuel(docId: string) {
+    setBusy(true);
+    try {
+      const duel = await createDuel(groupId, docId);
+      toast.success(`Duelo "${duel.title}" creado`);
+      setPicker(null);
+      router.push(`/duelo/${duel.id}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo crear el duelo");
+      setBusy(false);
     }
   }
 
@@ -109,6 +222,18 @@ export default function GroupDetailPage() {
   }
 
   const podiumXp = group.ranking[0]?.xp_week || 0;
+  const readyDocs = myDocs.filter((d) => d.status === "ready");
+  // Para crear duelo: mis docs listos + mazos compartidos (por doc_id, dedupe)
+  const duelDocs = [
+    ...readyDocs.map((d) => ({ id: d.id, title: d.title })),
+    ...decks.filter((dk) => !readyDocs.some((d) => d.id === dk.doc_id)).map((dk) => ({ id: dk.doc_id, title: `${dk.title} (compartido)` })),
+  ];
+
+  const tabs: { key: Tab; label: string; icon: typeof Flame; count?: number }[] = [
+    { key: "ranking", label: "Ranking", icon: Flame },
+    { key: "mazos", label: "Mazos", icon: Layers, count: decks.length },
+    { key: "duelos", label: "Duelos", icon: Swords, count: duels.length },
+  ];
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -122,7 +247,7 @@ export default function GroupDetailPage() {
         Mis grupos
       </Link>
 
-      {/* ── Header del grupo ── */}
+      {/* ── Header ── */}
       <div className="mb-5 rounded-2xl border border-white/8 bg-white/[0.02] p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -139,7 +264,6 @@ export default function GroupDetailPage() {
               </p>
             </div>
           </div>
-
           <div className="flex items-center gap-2">
             <button
               onClick={copyCode}
@@ -159,62 +283,196 @@ export default function GroupDetailPage() {
             </button>
           </div>
         </div>
-        <p className="mt-3 text-xs text-gray-600">
-          Compartí el código con tu comisión para que se sumen al ranking.
-        </p>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div className="mb-5 flex w-fit gap-1 rounded-xl border border-white/5 bg-white/[0.03] p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setPicker(null); }}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              tab === t.key ? "bg-violet-600 text-white" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <t.icon size={15} />
+            {t.label}
+            {t.count !== undefined && t.count > 0 && (
+              <span className={`rounded-md px-1.5 text-xs ${tab === t.key ? "bg-white/20" : "bg-white/10 text-gray-500"}`}>
+                {t.count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* ── Ranking ── */}
-      <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Flame size={15} className="text-orange-400" />
-            Ranking semanal
+      {tab === "ranking" && (
+        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Flame size={15} className="text-orange-400" />
+              Ranking semanal
+            </div>
+            <span className="text-xs text-gray-600">Por XP · últimos 7 días</span>
           </div>
-          <span className="text-xs text-gray-600">Últimos 7 días</span>
-        </div>
-
-        <div className="space-y-2">
-          {group.ranking.map((entry, i) => (
-            <div
-              key={entry.user_id}
-              className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
-                entry.is_you
-                  ? "border-violet-500/35 bg-violet-500/[0.07]"
-                  : "border-white/8 bg-white/[0.015]"
-              }`}
-            >
-              <RankBadge position={i + 1} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  {entry.display_name}
-                  {entry.is_you && <span className="ml-1.5 text-xs text-violet-400">(vos)</span>}
-                </p>
-                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/5">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-violet-600 to-violet-400"
-                    style={{ width: podiumXp > 0 ? `${Math.round((entry.xp_week / podiumXp) * 100)}%` : "0%" }}
-                  />
+          <div className="space-y-2">
+            {group.ranking.map((entry, i) => (
+              <div
+                key={entry.user_id}
+                className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
+                  entry.is_you ? "border-violet-500/35 bg-violet-500/[0.07]" : "border-white/8 bg-white/[0.015]"
+                }`}
+              >
+                <RankBadge position={i + 1} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">
+                    {entry.display_name}
+                    {entry.is_you && <span className="ml-1.5 text-xs text-violet-400">(vos)</span>}
+                  </p>
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/5">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-600 to-violet-400"
+                      style={{ width: podiumXp > 0 ? `${Math.round((entry.xp_week / podiumXp) * 100)}%` : "0%" }}
+                    />
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="flex items-center justify-end gap-1 text-sm font-bold">
+                    <Zap size={12} className="text-violet-400" />
+                    {entry.xp_week.toLocaleString("es")}
+                  </p>
+                  <p className="text-[10px] text-gray-600">{entry.xp_total.toLocaleString("es")} total</p>
                 </div>
               </div>
-              <div className="shrink-0 text-right">
-                <p className="flex items-center justify-end gap-1 text-sm font-bold">
-                  <Zap size={12} className="text-violet-400" />
-                  {entry.xp_week.toLocaleString("es")}
-                </p>
-                <p className="text-[10px] text-gray-600">{entry.xp_total.toLocaleString("es")} total</p>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
+      )}
 
-        {group.ranking.length === 1 && (
-          <p className="mt-4 text-center text-xs text-gray-600">
-            Por ahora sos vos solo. Pasá el código <span className="font-mono text-gray-400">{group.code}</span> y
-            que empiece la competencia.
-          </p>
-        )}
-      </div>
+      {/* ── Mazos ── */}
+      {tab === "mazos" && (
+        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Layers size={15} className="text-violet-400" />
+              Mazos compartidos
+            </div>
+            <button
+              onClick={() => setPicker(picker === "share" ? null : "share")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300 transition-colors hover:border-white/20 hover:text-white"
+            >
+              <Plus size={13} /> Compartir mazo
+            </button>
+          </div>
+
+          {picker === "share" && (
+            <div className="mb-4">
+              <DocPicker
+                label="Elegí uno de tus documentos para compartir"
+                docs={readyDocs.filter((d) => !decks.some((dk) => dk.doc_id === d.id)).map((d) => ({ id: d.id, title: d.title }))}
+                onPick={handleShare}
+                onCancel={() => setPicker(null)}
+              />
+            </div>
+          )}
+
+          {decks.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-600">
+              Nadie compartió material todavía. Compartí tus apuntes para que toda la comisión estudie lo mismo.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {decks.map((d) => (
+                <div key={d.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
+                    <Layers size={16} />
+                  </div>
+                  <Link href={`/mazo/${d.id}`} className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium hover:text-violet-300">{d.title}</p>
+                    <p className="text-xs text-gray-500">Compartido por {d.is_mine ? "vos" : d.shared_by_name}</p>
+                  </Link>
+                  {(d.is_mine || group.is_owner) && (
+                    <button
+                      onClick={() => handleUnshare(d.id)}
+                      className="rounded-lg p-2 text-gray-600 transition-all hover:bg-red-500/10 hover:text-red-400"
+                      title="Quitar del grupo"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Duelos ── */}
+      {tab === "duelos" && (
+        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Swords size={15} className="text-violet-400" />
+              Duelos
+            </div>
+            <button
+              onClick={() => setPicker(picker === "duel" ? null : "duel")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-gray-300 transition-colors hover:border-white/20 hover:text-white"
+            >
+              <Plus size={13} /> Crear duelo
+            </button>
+          </div>
+
+          {picker === "duel" && (
+            <div className="mb-4">
+              <DocPicker
+                label="Mismas preguntas para todo el grupo. Elegí el material:"
+                docs={duelDocs}
+                onPick={handleCreateDuel}
+                onCancel={() => setPicker(null)}
+              />
+            </div>
+          )}
+
+          {busy && <div className="mb-3 flex justify-center"><Loader2 className="animate-spin text-violet-500" size={18} /></div>}
+
+          {duels.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-600">
+              Sin duelos todavía. Creá uno y competí con tu comisión sobre las mismas preguntas.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {duels.map((d) => (
+                <Link
+                  key={d.id}
+                  href={`/duelo/${d.id}`}
+                  className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3 transition-colors hover:border-violet-500/30"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
+                    <Swords size={16} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{d.title}</p>
+                    <p className="text-xs text-gray-500">
+                      {d.total} preguntas · {d.played_count} {d.played_count === 1 ? "jugó" : "jugaron"}
+                    </p>
+                  </div>
+                  {d.played ? (
+                    <span className="shrink-0 rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300">
+                      {d.my_score}/{d.total}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-md bg-violet-500/15 px-2 py-1 text-xs font-semibold text-violet-300">
+                      Jugar
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </main>
   );
 }

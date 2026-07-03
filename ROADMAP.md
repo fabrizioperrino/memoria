@@ -28,9 +28,14 @@
 - Reusa `evaluate_answer` (nota + feedback + follow-ups) y otorga XP de examen.
 - Costo ~US$0.02 por simulacro de 15 min. **Requiere GROQ_API_KEY real para funcionar.**
 
-## Sprint 3 — Activar lo social
-- Mazos del grupo: `documents.group_id` o tabla puente; los miembros estudian el mismo material
-- Duelo semanal: mismas preguntas para el grupo, tabla async (`quiz_results` + `groups`)
+## Sprint 3 — Activar lo social ✅
+- **Mazos compartidos** (`group_shares`): un miembro comparte su documento con el grupo;
+  el resto lo estudia en `/mazo/[shareId]` (resumen/flashcards/conceptos, solo lectura).
+- **Duelos** (`duels` + `duel_attempts`): mismas preguntas para todo el grupo, congeladas
+  al crear. Cada uno juega una vez (`/duelo/[id]`), corrección server-side (sin filtrar
+  la respuesta correcta), tabla de posiciones. Migración 004.
+- Detalle de grupo (`/grupos/[id]`) con pestañas Ranking / Mazos / Duelos.
+- Verificado E2E (2 usuarios) + navegador: compartir, crear duelo, jugar, leaderboard.
 
 ## Sprint 4 — Hábito diario
 - Sesión guiada: form (tiempo + materia) → sesión determinística (vencidas → débiles → quiz)

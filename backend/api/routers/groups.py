@@ -229,6 +229,130 @@ async def get_group(group_id: str, current_user=Depends(get_current_user)):
     }
 
 
+# ── Mazos compartidos ──────────────────────────────────────────────────────────
+
+class ShareDeckRequest(BaseModel):
+    doc_id: str
+
+
+@router.post("/{group_id}/decks")
+async def share_deck(group_id: str, body: ShareDeckRequest, current_user=Depends(get_current_user)):
+    """Comparte uno de mis documentos con el grupo."""
+    if not _get_membership(group_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Grupo no encontrado.")
+
+    doc = (
+        supabase.table("documents")
+        .select("id, title, status")
+        .eq("id", body.doc_id)
+        .eq("user_id", current_user.id)
+        .maybe_single()
+        .execute()
+    )
+    if not doc or not doc.data:
+        raise HTTPException(status_code=404, detail="Documento no encontrado.")
+    if doc.data["status"] != "ready":
+        raise HTTPException(status_code=400, detail="El documento todavía se está procesando.")
+
+    existing = (
+        supabase.table("group_shares")
+        .select("id")
+        .eq("group_id", group_id)
+        .eq("doc_id", body.doc_id)
+        .execute()
+    )
+    if existing.data:
+        return existing.data[0]
+
+    resp = supabase.table("group_shares").insert({
+        "group_id": group_id,
+        "doc_id": body.doc_id,
+        "shared_by": current_user.id,
+        "title": doc.data["title"],
+    }).execute()
+    return resp.data[0]
+
+
+@router.get("/{group_id}/decks")
+async def list_decks(group_id: str, current_user=Depends(get_current_user)):
+    """Mazos compartidos en el grupo, con nombre de quién los compartió."""
+    if not _get_membership(group_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Grupo no encontrado.")
+
+    shares = (
+        supabase.table("group_shares")
+        .select("id, doc_id, shared_by, title, created_at")
+        .eq("group_id", group_id)
+        .order("created_at", desc=True)
+        .execute()
+    ).data or []
+
+    # Nombre de quien compartió (desde group_members del grupo)
+    members = (
+        supabase.table("group_members")
+        .select("user_id, display_name")
+        .eq("group_id", group_id)
+        .execute()
+    ).data or []
+    names = {m["user_id"]: m.get("display_name") or "Estudiante" for m in members}
+
+    return [
+        {**s, "shared_by_name": names.get(s["shared_by"], "Estudiante"),
+         "is_mine": s["shared_by"] == current_user.id}
+        for s in shares
+    ]
+
+
+@router.get("/decks/{share_id}")
+async def get_shared_deck(share_id: str, current_user=Depends(get_current_user)):
+    """Material de estudio de un mazo compartido (solo lectura, para miembros del grupo)."""
+    share = (
+        supabase.table("group_shares")
+        .select("id, group_id, doc_id, title, shared_by")
+        .eq("id", share_id)
+        .maybe_single()
+        .execute()
+    )
+    if not share or not share.data:
+        raise HTTPException(status_code=404, detail="Mazo no encontrado.")
+    if not _get_membership(share.data["group_id"], current_user.id):
+        raise HTTPException(status_code=404, detail="Mazo no encontrado.")
+
+    doc = (
+        supabase.table("documents")
+        .select("id, title, summary, flashcards, exam_questions, key_concepts")
+        .eq("id", share.data["doc_id"])
+        .maybe_single()
+        .execute()
+    )
+    if not doc or not doc.data:
+        raise HTTPException(status_code=404, detail="El documento ya no está disponible.")
+    return {**doc.data, "share_id": share_id, "group_id": share.data["group_id"]}
+
+
+@router.delete("/{group_id}/decks/{share_id}")
+async def unshare_deck(group_id: str, share_id: str, current_user=Depends(get_current_user)):
+    """Quita un mazo del grupo (quien lo compartió o el dueño del grupo)."""
+    share = (
+        supabase.table("group_shares")
+        .select("id, shared_by, group_id")
+        .eq("id", share_id)
+        .eq("group_id", group_id)
+        .maybe_single()
+        .execute()
+    )
+    if not share or not share.data:
+        raise HTTPException(status_code=404, detail="Mazo no encontrado.")
+
+    grp = supabase.table("groups").select("created_by").eq("id", group_id).maybe_single().execute()
+    is_owner = grp and grp.data and grp.data["created_by"] == current_user.id
+    if share.data["shared_by"] != current_user.id and not is_owner:
+        raise HTTPException(status_code=403, detail="Solo quien lo compartió o el dueño del grupo puede quitarlo.")
+
+    supabase.table("group_shares").delete().eq("id", share_id).execute()
+    return {"message": "Mazo quitado del grupo."}
+
+
 @router.post("/{group_id}/leave")
 async def leave_group(group_id: str, current_user=Depends(get_current_user)):
     """Salir de un grupo. Si queda vacío, se elimina."""
