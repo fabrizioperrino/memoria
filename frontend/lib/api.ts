@@ -526,3 +526,23 @@ export async function getReadiness(): Promise<ReadinessSummary> {
   }
   return res.json();
 }
+
+// ─── Simulacro oral (voz) ─────────────────────────────────────────────────────
+
+/** Transcribe la respuesta hablada del estudiante con Whisper. */
+export async function transcribeOralAnswer(docId: string, audio: Blob): Promise<string> {
+  const headers = await authHeadersNoContentType();
+  const form = new FormData();
+  form.append("audio", audio, "answer.webm");
+  const res = await fetch(`${API_URL}/exam/${docId}/oral/transcribe`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo transcribir el audio");
+  }
+  const data = await res.json();
+  return data.transcript as string;
+}

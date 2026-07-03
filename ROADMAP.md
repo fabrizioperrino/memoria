@@ -20,10 +20,13 @@
   3. Mini quiz con preguntas antes falladas (de `quiz_results.answers`)
 - No toca el schedule SM-2 (cram no distorsiona intervalos).
 
-## Sprint 2 — Simulacro oral por voz
-- MediaRecorder (browser) → `POST /exam/{id}/oral/transcribe` → Whisper turbo en Groq ($0.04/h)
-- Corrección con `exam_service` existente; voz del profesor con SpeechSynthesis (gratis)
-- Costo estimado: ~US$0.02 por simulacro de 15 min
+## Sprint 2 — Simulacro oral por voz ✅
+- `/oral/[id]`: mesa de examen. Profesor pregunta por voz (SpeechSynthesis, gratis),
+  estudiante responde hablando (MediaRecorder), Whisper transcribe, exam_service corrige.
+- `POST /exam/{id}/oral/transcribe` → `oral_service.transcribe_audio` (Whisper turbo, $0.04/h)
+- Flujo: intro → pregunta hablada → grabar → transcribir → revisar → evaluar → repregunta/siguiente → promedio final
+- Reusa `evaluate_answer` (nota + feedback + follow-ups) y otorga XP de examen.
+- Costo ~US$0.02 por simulacro de 15 min. **Requiere GROQ_API_KEY real para funcionar.**
 
 ## Sprint 3 — Activar lo social
 - Mazos del grupo: `documents.group_id` o tabla puente; los miembros estudian el mismo material

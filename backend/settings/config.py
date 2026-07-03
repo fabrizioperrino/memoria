@@ -5,6 +5,8 @@ from typing import List
 class Settings(BaseSettings):
     GROQ_API_KEY: str
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    # Whisper para el simulacro oral — turbo: ~$0.04/hora de audio
+    WHISPER_MODEL: str = "whisper-large-v3-turbo"
     SUPABASE_URL: str
     SUPABASE_KEY: str
     SUPABASE_JWT_SECRET: str = ""   # opcional — solo para tokens legacy HS256

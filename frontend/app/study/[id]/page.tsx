@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { getDocument, getQuizHistory, Document, QuizResult } from "@/lib/api";
 import Link from "next/link";
-import { ArrowLeft, RotateCcw, CheckCircle2, ChevronRight, BookOpen, Layers, Key, FileText, MessageSquare, Target, TrendingUp, AlertCircle, Brain, Siren } from "lucide-react";
+import { ArrowLeft, RotateCcw, CheckCircle2, ChevronRight, BookOpen, Layers, Key, FileText, MessageSquare, Target, TrendingUp, AlertCircle, Brain, Siren, GraduationCap } from "lucide-react";
 
 type Tab = "summary" | "flashcards" | "exam" | "concepts";
 
@@ -139,6 +139,13 @@ export default function StudyPage() {
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all"
             >
               <Brain size={15} /> Examen IA
+            </Link>
+            <Link
+              href={`/oral/${id}`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all"
+              title="Simulacro de final oral: respondé hablando"
+            >
+              <GraduationCap size={15} /> Oral
             </Link>
             <Link
               href={`/review/${id}`}
