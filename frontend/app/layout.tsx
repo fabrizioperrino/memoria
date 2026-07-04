@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import NavBar from "@/components/NavBar";
+import DevAccountSwitcher from "@/components/DevAccountSwitcher";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="pt-16">
             {children}
           </div>
+          <DevAccountSwitcher />
         </AuthProvider>
       </body>
     </html>
