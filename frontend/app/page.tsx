@@ -37,6 +37,7 @@ import {
   Loader2,
   Globe,
   CalendarDays,
+  Play,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Landing from "@/components/Landing";
@@ -255,12 +256,38 @@ function Dashboard() {
             </Link>
             <Link
               href="/upload"
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20 active:scale-[0.98]"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all active:scale-[0.98]"
             >
               <Upload size={15} /> Subir material
             </Link>
           </div>
         </div>
+
+        {/* ── Franja diaria: qué hacer hoy ── */}
+        {documents.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-5 rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-600/[0.12] to-transparent">
+            <div className="flex-1">
+              <p className="text-sm font-semibold mb-0.5">Tu sesión de hoy</p>
+              <p className="text-sm text-gray-400">
+                {(stats?.cards_due_today ?? 0) > 0 ? (
+                  <>
+                    Tenés <span className="font-semibold text-violet-300">{stats?.cards_due_today}</span>{" "}
+                    {(stats?.cards_due_today ?? 0) === 1 ? "carta lista para repasar" : "cartas listas para repasar"}.
+                    Armamos la sesión con lo que más te conviene.
+                  </>
+                ) : (
+                  "Sin cartas vencidas. Armá una sesión rápida para reforzar tus temas flojos."
+                )}
+              </p>
+            </div>
+            <Link
+              href="/sesion"
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-semibold transition-all shadow-lg shadow-violet-600/20 active:scale-[0.98] shrink-0"
+            >
+              <Play size={15} /> Empezar sesión
+            </Link>
+          </div>
+        )}
 
         {loading ? (
           <div className="space-y-3">
