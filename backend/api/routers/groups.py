@@ -353,6 +353,129 @@ async def unshare_deck(group_id: str, share_id: str, current_user=Depends(get_cu
     return {"message": "Mazo quitado del grupo."}
 
 
+# ── Pulse: quién estudió hoy + racha del grupo + feed ───────────────────────────
+
+def _feed_line(kind: str, meta: dict, doc_title: str | None, count: int = 1) -> str:
+    m = meta or {}
+    doc = f" en {doc_title}" if doc_title else ""
+    if kind == "upload":
+        return f"sumó material nuevo{doc}"
+    if kind == "quiz":
+        pct = m.get("percentage")
+        return f"hizo un quiz{doc}" + (f" — {pct}%" if pct is not None else "")
+    if kind == "exam":
+        score = m.get("score")
+        return f"rindió un oral{doc}" + (f" — {score}/10" if score is not None else "")
+    if kind == "review":
+        return f"repasó {count} {'carta' if count == 1 else 'cartas'}{doc}"
+    return "estudió"
+
+
+@router.get("/{group_id}/pulse")
+async def group_pulse(group_id: str, current_user=Depends(get_current_user)):
+    """Actividad de hoy, racha del grupo y feed reciente."""
+    if not _get_membership(group_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Grupo no encontrado.")
+
+    members = (
+        supabase.table("group_members")
+        .select("user_id, display_name")
+        .eq("group_id", group_id)
+        .execute()
+    ).data or []
+    names = {m["user_id"]: m.get("display_name") or "Estudiante" for m in members}
+    member_ids = list(names.keys())
+
+    # Eventos recientes de los miembros (para hoy, racha y feed)
+    events = (
+        supabase.table("xp_events")
+        .select("user_id, kind, meta, doc_id, created_at")
+        .in_("user_id", member_ids)
+        .order("created_at", desc=True)
+        .limit(300)
+        .execute()
+    ).data or []
+
+    today = datetime.now(timezone.utc).date()
+
+    def ev_date(e):
+        try:
+            return datetime.fromisoformat(e["created_at"].replace("Z", "+00:00")).date()
+        except Exception:
+            return None
+
+    # Quién estudió hoy
+    studied_today = {e["user_id"] for e in events if ev_date(e) == today}
+    today_list = sorted(
+        (
+            {"user_id": uid, "name": names[uid], "done": uid in studied_today, "is_you": uid == current_user.id}
+            for uid in member_ids
+        ),
+        key=lambda x: (not x["done"], x["name"].lower()),
+    )
+
+    # Racha del grupo: días consecutivos con al menos un miembro activo
+    active_dates = {d for e in events if (d := ev_date(e))}
+    streak = 0
+    check = today
+    if today not in active_dates:
+        check = today - timedelta(days=1)
+    while check in active_dates:
+        streak += 1
+        check -= timedelta(days=1)
+
+    # Feed: agrupar reviews por (usuario, día); el resto individual
+    doc_ids = list({e["doc_id"] for e in events if e.get("doc_id")})
+    titles: dict[str, str] = {}
+    if doc_ids:
+        docs = (
+            supabase.table("documents")
+            .select("id, title")
+            .in_("id", doc_ids)
+            .execute()
+        ).data or []
+        titles = {d["id"]: d["title"] for d in docs}
+
+    feed = []
+    review_groups: dict[tuple, dict] = {}
+    for e in events:
+        d = ev_date(e)
+        if e["kind"] == "review":
+            key = (e["user_id"], d)
+            g = review_groups.get(key)
+            if g:
+                g["count"] += 1
+            else:
+                g = {"user_id": e["user_id"], "kind": "review", "count": 1,
+                     "created_at": e["created_at"], "doc_id": e.get("doc_id")}
+                review_groups[key] = g
+                feed.append(g)
+        else:
+            feed.append({"user_id": e["user_id"], "kind": e["kind"], "count": 1,
+                         "created_at": e["created_at"], "meta": e.get("meta"), "doc_id": e.get("doc_id")})
+
+    feed.sort(key=lambda x: x["created_at"], reverse=True)
+    feed_out = [
+        {
+            "name": names.get(f["user_id"], "Estudiante"),
+            "is_you": f["user_id"] == current_user.id,
+            "kind": f["kind"],
+            "text": _feed_line(f["kind"], f.get("meta"), titles.get(f.get("doc_id")), f.get("count", 1)),
+            "created_at": f["created_at"],
+        }
+        for f in feed[:15]
+    ]
+
+    return {
+        "member_count": len(member_ids),
+        "studied_today_count": len(studied_today),
+        "you_studied_today": current_user.id in studied_today,
+        "today": today_list,
+        "group_streak": streak,
+        "feed": feed_out,
+    }
+
+
 @router.post("/{group_id}/leave")
 async def leave_group(group_id: str, current_user=Depends(get_current_user)):
     """Salir de un grupo. Si queda vacío, se elimina."""

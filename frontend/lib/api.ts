@@ -748,3 +748,36 @@ export async function getSessionPlan(minutes: number, subject?: string): Promise
   }
   return res.json();
 }
+
+// ─── Pulse del grupo (retención) ──────────────────────────────────────────────
+
+export interface TodayMember {
+  user_id: string;
+  name: string;
+  done: boolean;
+  is_you: boolean;
+}
+
+export interface FeedItem {
+  name: string;
+  is_you: boolean;
+  kind: "upload" | "quiz" | "exam" | "review";
+  text: string;
+  created_at: string;
+}
+
+export interface GroupPulse {
+  member_count: number;
+  studied_today_count: number;
+  you_studied_today: boolean;
+  today: TodayMember[];
+  group_streak: number;
+  feed: FeedItem[];
+}
+
+export async function getGroupPulse(groupId: string): Promise<GroupPulse> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/${groupId}/pulse`, { headers });
+  if (!res.ok) throw new Error("Error cargando la actividad del grupo");
+  return res.json();
+}
