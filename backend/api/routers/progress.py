@@ -302,3 +302,152 @@ async def get_readiness(current_user=Depends(get_current_user)):
         "subjects": subject_list,
         "weakest": weakest,
     }
+
+
+# ── Sesión guiada ──────────────────────────────────────────────────────────────
+# Arma una sesión de estudio determinística con los datos del usuario:
+# 1) cartas vencidas  2) quiz de los temas más flojos  3) oral si sobra tiempo.
+# Sin IA: es curaduría de tus propios datos.
+
+MIN_PER_CARD = 0.5      # repasar una flashcard
+MIN_PER_QUIZ_Q = 0.75   # responder una pregunta de quiz
+MIN_PER_ORAL_Q = 4.0    # responder una pregunta oral hablando
+ORAL_MIN_BUDGET = 8     # minutos libres necesarios para proponer un oral
+
+
+def _count_due_cards(flashcards: list) -> int:
+    now = datetime.now(timezone.utc)
+    due = 0
+    for fc in flashcards or []:
+        nr = fc.get("next_review")
+        if nr is None:
+            due += 1
+            continue
+        try:
+            d = datetime.fromisoformat(str(nr).replace("Z", "+00:00"))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=timezone.utc)
+            if d <= now:
+                due += 1
+        except Exception:
+            due += 1
+    return due
+
+
+@router.get("/session-plan")
+async def get_session_plan(
+    minutes: int = 45,
+    subject: str | None = None,
+    current_user=Depends(get_current_user),
+):
+    """Plan de sesión guiada: qué estudiar ahora, con presupuesto de tiempo."""
+    minutes = max(10, min(minutes, 240))
+    uid = current_user.id
+
+    docs_resp = (
+        supabase.table("documents")
+        .select("id, title, subject, status, flashcards, exam_questions")
+        .eq("user_id", uid)
+        .eq("status", "ready")
+        .execute()
+    )
+    docs = docs_resp.data or []
+    if subject:
+        docs = [d for d in docs if (d.get("subject") or "Sin materia") == subject]
+    if not docs:
+        return {"minutes": minutes, "subject": subject, "blocks": [], "readiness_before": 0}
+
+    quiz_resp = (
+        supabase.table("quiz_results")
+        .select("doc_id, percentage, created_at")
+        .eq("user_id", uid)
+        .execute()
+    )
+    quizzes_by_doc: dict[str, list] = {}
+    for r in quiz_resp.data or []:
+        quizzes_by_doc.setdefault(r["doc_id"], []).append(r)
+
+    # Métricas por doc
+    metas = []
+    for d in docs:
+        score = _doc_readiness(d.get("flashcards"), quizzes_by_doc.get(d["id"], []))
+        metas.append({
+            "doc": d,
+            "due": _count_due_cards(d.get("flashcards")),
+            "readiness": score["readiness"],
+            "questions": len(d.get("exam_questions") or []),
+        })
+
+    overall = round(sum(m["readiness"] for m in metas) / len(metas))
+    remaining = float(minutes)
+    blocks = []
+
+    # 1) Repaso de vencidas (hasta ~50% del tiempo), más vencidas primero
+    review_budget = minutes * 0.5
+    for m in sorted(metas, key=lambda x: x["due"], reverse=True):
+        if m["due"] == 0 or review_budget <= 1:
+            break
+        cards = min(m["due"], int(review_budget / MIN_PER_CARD), 20)
+        if cards < 1:
+            break
+        est = round(cards * MIN_PER_CARD) or 1
+        blocks.append({
+            "type": "review",
+            "doc_id": m["doc"]["id"],
+            "doc_title": m["doc"]["title"],
+            "detail": f"{cards} {'carta vencida' if cards == 1 else 'cartas vencidas'}",
+            "est_minutes": est,
+        })
+        review_budget -= est
+        remaining -= est
+
+    # 2) Quiz de los temas más flojos (1-2 bloques)
+    for m in sorted(metas, key=lambda x: x["readiness"]):
+        if len([b for b in blocks if b["type"] == "quiz"]) >= 2:
+            break
+        if m["questions"] < 3 or remaining < 5:
+            continue
+        qcount = min(m["questions"], 8)
+        est = round(qcount * MIN_PER_QUIZ_Q) or 3
+        if est > remaining:
+            continue
+        blocks.append({
+            "type": "quiz",
+            "doc_id": m["doc"]["id"],
+            "doc_title": m["doc"]["title"],
+            "detail": f"Quiz — tu tema más flojo ({m['readiness']}% listo)",
+            "est_minutes": est,
+        })
+        remaining -= est
+
+    # 3) Oral si sobra tiempo y hay preguntas
+    if remaining >= ORAL_MIN_BUDGET:
+        candidates = [m for m in metas if m["questions"] >= 2]
+        if candidates:
+            weakest = min(candidates, key=lambda x: x["readiness"])
+            qcount = max(2, min(int(remaining / MIN_PER_ORAL_Q), 4))
+            blocks.append({
+                "type": "oral",
+                "doc_id": weakest["doc"]["id"],
+                "doc_title": weakest["doc"]["title"],
+                "detail": f"Simulacro oral — {qcount} preguntas habladas",
+                "est_minutes": round(qcount * MIN_PER_ORAL_Q),
+            })
+
+    # Fallback: sin vencidas ni quizzes posibles → releer el más flojo
+    if not blocks:
+        weakest = min(metas, key=lambda x: x["readiness"])
+        blocks.append({
+            "type": "study",
+            "doc_id": weakest["doc"]["id"],
+            "doc_title": weakest["doc"]["title"],
+            "detail": "Releé el resumen y los conceptos clave",
+            "est_minutes": min(minutes, 20),
+        })
+
+    return {
+        "minutes": minutes,
+        "subject": subject,
+        "blocks": blocks,
+        "readiness_before": overall,
+    }

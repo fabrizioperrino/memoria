@@ -719,3 +719,32 @@ export async function getDuelResults(duelId: string): Promise<DuelResults> {
   if (!res.ok) throw new Error("Error cargando los resultados");
   return res.json();
 }
+
+// ─── Sesión guiada ────────────────────────────────────────────────────────────
+
+export interface SessionBlock {
+  type: "review" | "quiz" | "oral" | "study";
+  doc_id: string;
+  doc_title: string;
+  detail: string;
+  est_minutes: number;
+}
+
+export interface SessionPlan {
+  minutes: number;
+  subject: string | null;
+  blocks: SessionBlock[];
+  readiness_before: number;
+}
+
+export async function getSessionPlan(minutes: number, subject?: string): Promise<SessionPlan> {
+  const headers = await authHeaders();
+  const qs = new URLSearchParams({ minutes: String(minutes) });
+  if (subject) qs.set("subject", subject);
+  const res = await fetch(`${API_URL}/progress/session-plan?${qs}`, { headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo armar la sesión");
+  }
+  return res.json();
+}

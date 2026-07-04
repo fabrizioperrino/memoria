@@ -18,6 +18,7 @@ import {
   DuelListItem,
 } from "@/lib/api";
 import { toast, Toaster } from "sonner";
+import StudyRoom from "@/components/StudyRoom";
 import {
   ArrowLeft,
   Check,
@@ -29,6 +30,7 @@ import {
   LogOut,
   Medal,
   Plus,
+  Radio,
   Swords,
   Trash2,
   Trophy,
@@ -36,7 +38,7 @@ import {
   Zap,
 } from "lucide-react";
 
-type Tab = "ranking" | "mazos" | "duelos";
+type Tab = "ranking" | "sala" | "mazos" | "duelos";
 
 function RankBadge({ position }: { position: number }) {
   const styles: Record<number, string> = {
@@ -231,6 +233,7 @@ export default function GroupDetailPage() {
 
   const tabs: { key: Tab; label: string; icon: typeof Flame; count?: number }[] = [
     { key: "ranking", label: "Ranking", icon: Flame },
+    { key: "sala", label: "Sala", icon: Radio },
     { key: "mazos", label: "Mazos", icon: Layers, count: decks.length },
     { key: "duelos", label: "Duelos", icon: Swords, count: duels.length },
   ];
@@ -349,6 +352,9 @@ export default function GroupDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── Sala de estudio ── */}
+      {tab === "sala" && <StudyRoom groupId={groupId} />}
 
       {/* ── Mazos ── */}
       {tab === "mazos" && (

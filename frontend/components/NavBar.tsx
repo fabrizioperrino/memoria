@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Brain, Upload, LayoutDashboard, LogOut, User, TrendingUp, Users } from "lucide-react";
+import { Brain, Upload, LayoutDashboard, LogOut, User, TrendingUp, Users, Play } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
 
@@ -57,6 +57,14 @@ export default function NavBar() {
               >
                 <LayoutDashboard size={15} />
                 <span className="hidden sm:inline">Dashboard</span>
+              </Link>
+
+              <Link
+                href="/sesion"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all active:scale-95"
+              >
+                <Play size={15} />
+                <span className="hidden md:inline">Sesión</span>
               </Link>
 
               <Link

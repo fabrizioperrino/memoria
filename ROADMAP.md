@@ -37,9 +37,14 @@
 - Detalle de grupo (`/grupos/[id]`) con pestañas Ranking / Mazos / Duelos.
 - Verificado E2E (2 usuarios) + navegador: compartir, crear duelo, jugar, leaderboard.
 
-## Sprint 4 — Hábito diario
-- Sesión guiada: form (tiempo + materia) → sesión determinística (vencidas → débiles → quiz)
-- Sala de estudio: Supabase Realtime Presence (reactivar `[realtime]` en config.toml)
+## Sprint 4 — Hábito diario ✅
+- **Sesión guiada** (`/sesion`): form (tiempo + materia) → `GET /progress/session-plan`
+  arma bloques determinísticos (vencidas → quiz del tema flojo → oral si sobra tiempo).
+  Checklist persistido en localStorage; cierre muestra el delta del índice.
+- **Sala de estudio** (`StudyRoom` en pestaña de `/grupos/[id]`): presencia en vivo con
+  Supabase Realtime Presence (quién está, quién estudia) + pomodoro de 25 min compartido.
+  Requiere `[realtime] enabled = true` en config.toml.
+- Entrada "Sesión" en el NavBar.
 
 ## Backlog
 - Grabá la clase (Whisper, ~10¢/clase) · PWA offline · WhatsApp deep-link · Ligas
