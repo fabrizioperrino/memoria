@@ -353,6 +353,76 @@ async def unshare_deck(group_id: str, share_id: str, current_user=Depends(get_cu
     return {"message": "Mazo quitado del grupo."}
 
 
+@router.post("/decks/{share_id}/clone")
+async def clone_shared_deck(share_id: str, current_user=Depends(get_current_user)):
+    """
+    Agrega el mazo compartido a mis documentos para estudiarlo con mi propio
+    SM-2 (repaso, quiz, oral). Si ya lo agregué antes, devuelve el existente.
+    """
+    share = (
+        supabase.table("group_shares")
+        .select("id, group_id, doc_id")
+        .eq("id", share_id)
+        .maybe_single()
+        .execute()
+    )
+    if not share or not share.data:
+        raise HTTPException(status_code=404, detail="Mazo no encontrado.")
+    if not _get_membership(share.data["group_id"], current_user.id):
+        raise HTTPException(status_code=404, detail="Mazo no encontrado.")
+
+    # ¿Ya lo cloné? Devolver el existente (idempotente)
+    existing = (
+        supabase.table("documents")
+        .select("id")
+        .eq("user_id", current_user.id)
+        .eq("cloned_from", share.data["doc_id"])
+        .execute()
+    )
+    if existing.data:
+        return {"doc_id": existing.data[0]["id"], "already_cloned": True}
+
+    source = (
+        supabase.table("documents")
+        .select("title, subject, content, summary, flashcards, exam_questions, key_concepts")
+        .eq("id", share.data["doc_id"])
+        .maybe_single()
+        .execute()
+    )
+    if not source or not source.data:
+        raise HTTPException(status_code=404, detail="El documento original ya no existe.")
+    src = source.data
+
+    # Copia con el schedule SM-2 reseteado: el repaso es personal
+    fresh_cards = [
+        {
+            "question": fc.get("question", ""),
+            "answer": fc.get("answer", ""),
+            "interval": 0,
+            "ease_factor": 2.5,
+            "repetitions": 0,
+            "next_review": None,
+        }
+        for fc in (src.get("flashcards") or [])
+    ]
+
+    resp = supabase.table("documents").insert({
+        "user_id": current_user.id,
+        "title": src["title"],
+        "file_type": "text",
+        "status": "ready",
+        "subject": src.get("subject"),
+        "content": src.get("content"),
+        "summary": src.get("summary"),
+        "flashcards": fresh_cards,
+        "exam_questions": src.get("exam_questions") or [],
+        "key_concepts": src.get("key_concepts") or [],
+        "cloned_from": share.data["doc_id"],
+    }).execute()
+
+    return {"doc_id": resp.data[0]["id"], "already_cloned": False}
+
+
 # ── Pulse: quién estudió hoy + racha del grupo + feed ───────────────────────────
 
 def _feed_line(kind: str, meta: dict, doc_title: str | None, count: int = 1) -> str:

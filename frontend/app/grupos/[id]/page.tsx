@@ -10,6 +10,7 @@ import {
   listGroupDecks,
   shareDeck,
   unshareDeck,
+  cloneSharedDeck,
   listDuels,
   createDuel,
   getGroupPulse,
@@ -33,6 +34,8 @@ import {
   Medal,
   Activity,
   CalendarCheck2,
+  Download,
+  MessageCircle,
   Plus,
   Radio,
   Swords,
@@ -301,6 +304,18 @@ export default function GroupDetailPage() {
               <span className="font-mono tracking-widest text-violet-300">{group.code}</span>
               {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} className="text-gray-500" />}
             </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `Sumate a mi grupo de estudio "${group.name}" en memorIA. Entrá a ${typeof window !== "undefined" ? window.location.origin : ""}/grupos y usá el código ${group.code}`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366]/15 border border-[#25D366]/30 px-3 py-2 text-sm font-medium text-[#4ade80] transition-all hover:bg-[#25D366]/25 active:scale-95"
+              title="Invitar a tu comisión por WhatsApp"
+            >
+              <MessageCircle size={15} />
+              <span className="hidden sm:inline">Invitar</span>
+            </a>
             <button
               onClick={handleLeave}
               disabled={leaving}
@@ -495,6 +510,23 @@ export default function GroupDetailPage() {
                     <p className="truncate text-sm font-medium hover:text-violet-300">{d.title}</p>
                     <p className="text-xs text-gray-500">Compartido por {d.is_mine ? "vos" : d.shared_by_name}</p>
                   </Link>
+                  {!d.is_mine && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { doc_id, already_cloned } = await cloneSharedDeck(d.id);
+                          toast.success(already_cloned ? "Ya lo tenías en tus documentos" : "Agregado a tus documentos");
+                          router.push(`/study/${doc_id}`);
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "No se pudo agregar");
+                        }
+                      }}
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-violet-500 active:scale-95"
+                      title="Agregar a mis documentos y estudiarlo"
+                    >
+                      <Download size={12} /> Estudiar
+                    </button>
+                  )}
                   {(d.is_mine || group.is_owner) && (
                     <button
                       onClick={() => handleUnshare(d.id)}
@@ -556,7 +588,14 @@ export default function GroupDetailPage() {
                     <Swords size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{d.title}</p>
+                    <p className="flex items-center gap-2 truncate text-sm font-medium">
+                      <span className="truncate">{d.title}</span>
+                      {d.title.startsWith("Reto semanal") && (
+                        <span className="shrink-0 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-300">
+                          Semanal
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-gray-500">
                       {d.total} preguntas · {d.played_count} {d.played_count === 1 ? "jugó" : "jugaron"}
                     </p>

@@ -829,3 +829,21 @@ export async function listOralSessions(docId: string): Promise<OralSessionSummar
   if (!res.ok) throw new Error("Error cargando el historial de mesas");
   return res.json();
 }
+
+// ─── Sprint Comisión ──────────────────────────────────────────────────────────
+
+/** Agrega un mazo compartido a mis documentos (SM-2 propio). Idempotente. */
+export async function cloneSharedDeck(
+  shareId: string,
+): Promise<{ doc_id: string; already_cloned: boolean }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/groups/decks/${shareId}/clone`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo agregar el mazo");
+  }
+  return res.json();
+}

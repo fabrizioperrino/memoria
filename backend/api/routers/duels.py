@@ -4,6 +4,7 @@ Las preguntas se congelan al crear el duelo (snapshot) para que todos reciban
 exactamente las mismas, aunque después cambie el documento.
 """
 import random
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -16,6 +17,76 @@ router = APIRouter(tags=["duels"])
 
 DEFAULT_NUM_QUESTIONS = 8
 MIN_QUESTIONS = 3
+WEEKLY_PREFIX = "Reto semanal"
+
+
+def _week_label(now: datetime) -> str:
+    """Etiqueta determinística de la semana ISO, ej: 'Reto semanal · S27 2026'."""
+    year, week, _ = now.isocalendar()
+    return f"{WEEKLY_PREFIX} · S{week} {year}"
+
+
+def _maybe_create_weekly_duel(group_id: str, user_id: str) -> None:
+    """
+    Reto semanal automático: si el grupo tiene mazos compartidos y todavía no
+    existe el duelo de esta semana, se crea con preguntas mezcladas de los mazos.
+    Lazy: se dispara cuando alguien mira los duelos (sin cron).
+    """
+    title = _week_label(datetime.now(timezone.utc))
+    exists = (
+        supabase.table("duels")
+        .select("id")
+        .eq("group_id", group_id)
+        .eq("title", title)
+        .execute()
+    )
+    if exists.data:
+        return
+
+    shares = (
+        supabase.table("group_shares")
+        .select("doc_id")
+        .eq("group_id", group_id)
+        .execute()
+    ).data or []
+    if not shares:
+        return
+
+    docs = (
+        supabase.table("documents")
+        .select("exam_questions")
+        .in_("id", [s["doc_id"] for s in shares])
+        .execute()
+    ).data or []
+
+    pool = []
+    for d in docs:
+        pool.extend(q for q in (d.get("exam_questions") or []) if q.get("options"))
+    if len(pool) < MIN_QUESTIONS:
+        return
+
+    random.shuffle(pool)
+    # dedupe por texto de pregunta
+    seen: set = set()
+    snapshot = []
+    for q in pool:
+        key = q["question"].strip().lower()
+        if key not in seen:
+            seen.add(key)
+            snapshot.append(q)
+        if len(snapshot) >= DEFAULT_NUM_QUESTIONS:
+            break
+
+    try:
+        supabase.table("duels").insert({
+            "group_id": group_id,
+            "doc_id": None,
+            "title": title,
+            "questions": snapshot,
+            "created_by": user_id,
+        }).execute()
+    except Exception:
+        pass  # carrera entre dos miembros: el unique del título por semana no es crítico
 
 
 class CreateDuelRequest(BaseModel):
@@ -92,9 +163,11 @@ async def create_duel(group_id: str, body: CreateDuelRequest, current_user=Depen
 
 @router.get("/groups/{group_id}/duels")
 async def list_duels(group_id: str, current_user=Depends(get_current_user)):
-    """Duelos del grupo, con estado de mi intento."""
+    """Duelos del grupo, con estado de mi intento. Genera el reto semanal si falta."""
     if not _get_membership(group_id, current_user.id):
         raise HTTPException(status_code=404, detail="Grupo no encontrado.")
+
+    _maybe_create_weekly_duel(group_id, current_user.id)
 
     duels = (
         supabase.table("duels")

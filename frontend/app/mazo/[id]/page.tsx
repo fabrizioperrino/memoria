@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { getSharedDeck, SharedDeckMaterial } from "@/lib/api";
+import { useParams, useRouter } from "next/navigation";
+import { getSharedDeck, cloneSharedDeck, SharedDeckMaterial } from "@/lib/api";
 import { toast, Toaster } from "sonner";
-import { ArrowLeft, BookOpen, Key, Layers, Loader2, RotateCcw, Users } from "lucide-react";
+import { ArrowLeft, BookOpen, Download, Key, Layers, Loader2, RotateCcw, Users } from "lucide-react";
 
 type Tab = "summary" | "flashcards" | "concepts";
 
@@ -33,9 +33,24 @@ function FlipCard({ front, back }: { front: string; back: string }) {
 
 export default function SharedDeckPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [deck, setDeck] = useState<SharedDeckMaterial | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("summary");
+  const [cloning, setCloning] = useState(false);
+
+  async function handleStudy() {
+    if (!deck) return;
+    setCloning(true);
+    try {
+      const { doc_id, already_cloned } = await cloneSharedDeck(deck.share_id);
+      toast.success(already_cloned ? "Ya lo tenías en tus documentos" : "Mazo agregado a tus documentos");
+      router.push(`/study/${doc_id}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo agregar");
+      setCloning(false);
+    }
+  }
 
   useEffect(() => {
     if (!params.id) return;
@@ -88,8 +103,22 @@ export default function SharedDeckPage() {
         </span>
       </div>
 
-      <h1 className="mb-1 text-2xl font-bold tracking-tight">{deck.title}</h1>
-      <p className="mb-6 text-sm text-gray-500">Material compartido con tu grupo — solo lectura.</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="mb-1 text-2xl font-bold tracking-tight">{deck.title}</h1>
+          <p className="text-sm text-gray-500">
+            Material compartido con tu grupo. Agregalo a tus documentos para repasarlo con tu propio ritmo.
+          </p>
+        </div>
+        <button
+          onClick={handleStudy}
+          disabled={cloning}
+          className="flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/20 transition-all hover:bg-violet-500 active:scale-[0.98] disabled:opacity-50"
+        >
+          {cloning ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+          Estudiar este mazo
+        </button>
+      </div>
 
       <div className="mb-6 flex w-fit gap-1 rounded-xl border border-white/5 bg-white/[0.03] p-1">
         {tabs.map((t) => (
