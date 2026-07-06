@@ -7,9 +7,13 @@ import {
   getDocument,
   transcribeOralAnswer,
   evaluateAnswer,
+  saveOralSession,
+  listOralSessions,
   AnswerEvaluation,
   ExamQuestion,
   Document,
+  OralResultItem,
+  OralSessionSummary,
 } from "@/lib/api";
 import { toast, Toaster } from "sonner";
 import {
@@ -20,11 +24,39 @@ import {
   Loader2,
   Mic,
   RotateCcw,
+  Scale,
   Square,
+  Timer,
+  TrendingUp,
+  Users,
   Volume2,
+  X,
 } from "lucide-react";
 
-const MAX_QUESTIONS = 4; // preguntas principales por mesa
+const MAX_QUESTIONS = 4;      // preguntas principales por mesa
+const MESA_SECONDS = 20 * 60; // duración máxima de la mesa
+const PASS_SCORE = 4;         // 4 aprueba, como en la mesa real
+
+const PROFESSORS = [
+  {
+    id: "clasico",
+    name: "El clásico",
+    icon: GraduationCap,
+    desc: "Justo y equilibrado. Corrige claro, sin dramatizar.",
+  },
+  {
+    id: "exigente",
+    name: "El exigente",
+    icon: Scale,
+    desc: "El final más difícil de la carrera. Cada imprecisión cuesta.",
+  },
+  {
+    id: "tribunal",
+    name: "El tribunal",
+    icon: Users,
+    desc: "Tres profesores deliberan tu nota. Conceptos, ejemplos y precisión.",
+  },
+] as const;
 
 // ── Voz del profesor (SpeechSynthesis, gratis, corre en el dispositivo) ─────────
 function useProfessorVoice() {
@@ -123,13 +155,19 @@ function ScoreBadge({ score }: { score: number }) {
   const color =
     score >= 8 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" :
     score >= 6 ? "bg-violet-500/15 text-violet-300 border-violet-500/30" :
-    score >= 4 ? "bg-amber-500/15 text-amber-400 border-amber-500/30" :
+    score >= PASS_SCORE ? "bg-amber-500/15 text-amber-400 border-amber-500/30" :
                  "bg-red-500/15 text-red-400 border-red-500/30";
   return (
     <span className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-sm font-bold ${color}`}>
       {score}/10
     </span>
   );
+}
+
+function mmss(total: number) {
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 type Step = "asking" | "recording" | "transcribing" | "review" | "evaluating" | "feedback";
@@ -149,25 +187,42 @@ export default function OralExamPage() {
   const [doc, setDoc] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [phase, setPhase] = useState<"intro" | "session" | "done">("intro");
+  const [professor, setProfessor] = useState<(typeof PROFESSORS)[number]["id"]>("clasico");
+  const [history, setHistory] = useState<OralSessionSummary[]>([]);
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [qIndex, setQIndex] = useState(0);
-  const [turns, setTurns] = useState<Turn[]>([]); // turnos completados de la pregunta actual
   const [current, setCurrent] = useState<Turn | null>(null);
   const [step, setStep] = useState<Step>("asking");
-  const [allResults, setAllResults] = useState<{ score: number }[]>([]);
+  const [results, setResults] = useState<OralResultItem[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [savedActa, setSavedActa] = useState(false);
+
+  // Countdown de la mesa
+  const [secondsLeft, setSecondsLeft] = useState(MESA_SECONDS);
+  const mesaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resultsRef = useRef<OralResultItem[]>([]);
+  resultsRef.current = results;
 
   useEffect(() => {
     if (!params.id) return;
-    getDocument(params.id)
-      .then((d) => {
+    Promise.all([
+      getDocument(params.id),
+      listOralSessions(params.id).catch(() => []),
+    ])
+      .then(([d, h]) => {
         setDoc(d);
+        setHistory(h);
         const qs = [...(d.exam_questions ?? [])].sort(() => Math.random() - 0.5).slice(0, MAX_QUESTIONS);
         setQuestions(qs);
       })
       .catch(() => toast.error("No se pudo cargar el documento"))
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  useEffect(() => () => {
+    if (mesaTimerRef.current) clearInterval(mesaTimerRef.current);
+  }, []);
 
   const askQuestion = useCallback(
     (question: string, isFollowUp: boolean) => {
@@ -178,12 +233,48 @@ export default function OralExamPage() {
     [speak]
   );
 
+  const finishMesa = useCallback(async () => {
+    if (mesaTimerRef.current) clearInterval(mesaTimerRef.current);
+    stopVoice();
+    setPhase("done");
+    setCurrent(null);
+    const finalResults = resultsRef.current;
+    if (finalResults.length > 0) {
+      setSaving(true);
+      try {
+        await saveOralSession(
+          params.id,
+          professor,
+          MESA_SECONDS - secondsLeft,
+          finalResults,
+        );
+        setSavedActa(true);
+        setHistory(await listOralSessions(params.id).catch(() => history));
+      } catch {
+        toast.error("No se pudo guardar el acta (la mesa igual terminó)");
+      } finally {
+        setSaving(false);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id, professor, secondsLeft, stopVoice]);
+
   function startSession() {
     if (questions.length === 0) return;
     setPhase("session");
     setQIndex(0);
-    setTurns([]);
-    setAllResults([]);
+    setResults([]);
+    setSavedActa(false);
+    setSecondsLeft(MESA_SECONDS);
+    mesaTimerRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          finishMesa();
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
     askQuestion(questions[0].question, false);
   }
 
@@ -213,16 +304,21 @@ export default function OralExamPage() {
   async function handleEvaluate() {
     if (!current || !doc) return;
     setStep("evaluating");
-    const expected =
-      !current.isFollowUp
-        ? questions[qIndex]?.correct_answer ?? ""
-        : "";
+    const expected = !current.isFollowUp ? questions[qIndex]?.correct_answer ?? "" : "";
     try {
-      const evaluation = await evaluateAnswer(params.id, current.question, current.transcript, expected);
-      const done: Turn = { ...current, evaluation };
-      setCurrent(done);
+      const evaluation = await evaluateAnswer(params.id, current.question, current.transcript, expected, professor);
+      setCurrent({ ...current, evaluation });
       setStep("feedback");
-      setAllResults((r) => [...r, { score: evaluation.score }]);
+      setResults((r) => [
+        ...r,
+        {
+          question: current.question,
+          transcript: current.transcript,
+          score: evaluation.score,
+          feedback: evaluation.feedback,
+          is_follow_up: current.isFollowUp,
+        },
+      ]);
       speak(`${evaluation.score} de 10. ${evaluation.feedback}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error evaluando");
@@ -233,22 +329,18 @@ export default function OralExamPage() {
   function askFollowUp() {
     if (!current?.evaluation) return;
     stopVoice();
-    setTurns((t) => [...t, current]);
     const fu = current.evaluation.follow_up_questions[0];
     askQuestion(fu, true);
   }
 
   function nextQuestion() {
     stopVoice();
-    if (current) setTurns((t) => [...t, current]);
     const next = qIndex + 1;
     if (next < questions.length) {
       setQIndex(next);
-      setTurns([]);
       askQuestion(questions[next].question, false);
     } else {
-      setPhase("done");
-      setCurrent(null);
+      finishMesa();
     }
   }
 
@@ -271,10 +363,12 @@ export default function OralExamPage() {
     );
   }
 
-  const avg =
-    allResults.length > 0
-      ? Math.round((allResults.reduce((s, r) => s + r.score, 0) / allResults.length) * 10) / 10
-      : 0;
+  const avg = results.length > 0
+    ? Math.round((results.reduce((s, r) => s + r.score, 0) / results.length) * 10) / 10
+    : 0;
+  const passed = avg >= PASS_SCORE;
+  const profMeta = PROFESSORS.find((p) => p.id === professor)!;
+  const timeLow = secondsLeft <= 120;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
@@ -288,47 +382,104 @@ export default function OralExamPage() {
           <ArrowLeft size={15} />
           {doc.title}
         </Link>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-300">
-          <GraduationCap size={12} />
-          Mesa de examen
-        </span>
+        {phase === "session" ? (
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-sm font-bold ${
+              timeLow
+                ? "border-red-500/40 bg-red-500/10 text-red-300"
+                : "border-violet-500/25 bg-violet-500/10 text-violet-300"
+            }`}
+            title="Tiempo restante de la mesa"
+          >
+            <Timer size={13} />
+            {mmss(secondsLeft)}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-300">
+            <GraduationCap size={12} />
+            Mesa de examen
+          </span>
+        )}
       </div>
 
       {/* ── Intro ── */}
       {phase === "intro" && (
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-8 text-center">
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
-            <GraduationCap className="text-violet-400" size={26} />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">Simulacro de final oral</h1>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-gray-400">
-            Un profesor te va a hacer {questions.length} preguntas de este material. Las escuchás,
-            respondés <strong className="text-gray-200">hablando en voz alta</strong> — como en la mesa
-            real — y recibís nota, correcciones y repreguntas.
-          </p>
-          <div className="mx-auto mt-6 max-w-sm space-y-2 text-left text-sm text-gray-400">
-            <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
-              <Volume2 size={16} className="shrink-0 text-violet-400" /> El profesor pregunta en voz alta
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-8 text-center">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
+              <GraduationCap className="text-violet-400" size={26} />
             </div>
-            <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
-              <Mic size={16} className="shrink-0 text-violet-400" /> Grabás tu respuesta hablando
-            </div>
-            <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
-              <Check size={16} className="shrink-0 text-violet-400" /> Recibís nota y repregunta
-            </div>
-          </div>
-          {!voiceSupported && (
-            <p className="mt-4 text-xs text-amber-400/80">
-              Tu navegador no puede reproducir la voz del profesor, pero vas a ver la pregunta escrita.
+            <h1 className="text-2xl font-bold tracking-tight">Mesa de final</h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-gray-400">
+              {questions.length} preguntas en hasta {MESA_SECONDS / 60} minutos. Respondés{" "}
+              <strong className="text-gray-200">hablando en voz alta</strong>, el profesor corrige,
+              repregunta, y al final firmás el acta: <strong className="text-gray-200">4 aprueba</strong>.
             </p>
+
+            {/* Selector de profesor */}
+            <p className="mt-7 mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">
+              ¿Quién te toma?
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {PROFESSORS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setProfessor(p.id)}
+                  className={`rounded-xl border p-4 text-left transition-colors ${
+                    professor === p.id
+                      ? "border-violet-500/50 bg-violet-500/10"
+                      : "border-white/10 bg-white/[0.02] hover:border-white/20"
+                  }`}
+                >
+                  <p.icon size={18} className={professor === p.id ? "text-violet-300" : "text-gray-500"} />
+                  <p className={`mt-2 text-sm font-semibold ${professor === p.id ? "text-white" : "text-gray-300"}`}>
+                    {p.name}
+                  </p>
+                  <p className="mt-1 text-xs leading-snug text-gray-500">{p.desc}</p>
+                </button>
+              ))}
+            </div>
+
+            {!voiceSupported && (
+              <p className="mt-4 text-xs text-amber-400/80">
+                Tu navegador no reproduce la voz del profesor, pero vas a ver la pregunta escrita.
+              </p>
+            )}
+            <button
+              onClick={startSession}
+              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-7 py-3.5 text-sm font-semibold text-white shadow-xl shadow-violet-600/25 transition-all hover:bg-violet-500 active:scale-[0.98]"
+            >
+              Pasar al frente
+              <ArrowRight size={16} />
+            </button>
+          </div>
+
+          {/* Historial de mesas */}
+          {history.length > 0 && (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                <TrendingUp size={15} className="text-violet-400" />
+                Tus mesas anteriores
+              </div>
+              <div className="space-y-2">
+                {history.slice(0, 5).map((s) => (
+                  <div key={s.id} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.015] px-4 py-2.5 text-sm">
+                    <span className={`inline-flex h-7 w-12 items-center justify-center rounded-lg text-xs font-bold ${
+                      s.passed ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"
+                    }`}>
+                      {s.avg_score}
+                    </span>
+                    <span className="flex-1 text-gray-400">
+                      {s.passed ? "Aprobado" : "Desaprobado"} · {PROFESSORS.find((p) => p.id === s.professor)?.name ?? s.professor}
+                    </span>
+                    <span className="text-xs text-gray-600">
+                      {new Date(s.created_at).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-          <button
-            onClick={startSession}
-            className="mt-7 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-7 py-3.5 text-sm font-semibold text-white shadow-xl shadow-violet-600/25 transition-all hover:bg-violet-500 active:scale-[0.98]"
-          >
-            Pasar al frente
-            <ArrowRight size={16} />
-          </button>
         </div>
       )}
 
@@ -336,20 +487,20 @@ export default function OralExamPage() {
       {phase === "session" && current && (
         <div>
           <div className="mb-4 flex items-center justify-between text-xs text-gray-500">
-            <span>Pregunta {qIndex + 1} de {questions.length}</span>
-            {allResults.length > 0 && <span>Promedio parcial: {avg}/10</span>}
+            <span>Pregunta {qIndex + 1} de {questions.length} · {profMeta.name}</span>
+            {results.length > 0 && <span>Promedio parcial: {avg}/10</span>}
           </div>
 
           {/* Profesor + pregunta */}
           <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-6">
             <div className="flex items-start gap-3">
               <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-300 ${speaking ? "animate-pulse" : ""}`}>
-                <GraduationCap size={18} />
+                <profMeta.icon size={18} />
               </div>
               <div className="flex-1">
                 <div className="mb-1 flex items-center gap-2">
                   <span className="text-xs font-medium text-gray-500">
-                    {current.isFollowUp ? "Repregunta del profesor" : "El profesor pregunta"}
+                    {current.isFollowUp ? "Repregunta" : `${profMeta.name} pregunta`}
                   </span>
                   {voiceSupported && (
                     <button
@@ -366,7 +517,7 @@ export default function OralExamPage() {
             </div>
           </div>
 
-          {/* Zona de respuesta según el paso */}
+          {/* Zona de respuesta */}
           <div className="mt-4">
             {(step === "asking" || step === "recording") && (
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.02] p-8">
@@ -390,7 +541,7 @@ export default function OralExamPage() {
                     </button>
                     <span className="flex items-center gap-2 text-sm text-red-300">
                       <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                      Grabando · {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
+                      Grabando · {mmss(seconds)}
                     </span>
                     <span className="text-xs text-gray-600">Tocá el cuadrado cuando termines</span>
                   </>
@@ -431,16 +582,12 @@ export default function OralExamPage() {
             {step === "evaluating" && (
               <div className="flex items-center justify-center gap-3 rounded-2xl border border-white/8 bg-white/[0.02] p-10 text-sm text-gray-400">
                 <Loader2 className="animate-spin text-violet-500" size={18} />
-                El profesor está evaluando…
+                {professor === "tribunal" ? "El tribunal está deliberando…" : "El profesor está evaluando…"}
               </div>
             )}
 
             {step === "feedback" && current.evaluation && (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
-                  <p className="mb-2 text-xs text-gray-500">Tu respuesta</p>
-                  <p className="text-sm leading-relaxed text-gray-300">“{current.transcript}”</p>
-                </div>
                 <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.05] p-5">
                   <div className="mb-3 flex items-center justify-between">
                     <span className="text-xs font-semibold text-violet-300">Devolución</span>
@@ -462,7 +609,7 @@ export default function OralExamPage() {
                     onClick={nextQuestion}
                     className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white transition-all hover:bg-violet-500 active:scale-[0.99]"
                   >
-                    {qIndex + 1 < questions.length ? "Siguiente pregunta" : "Terminar el oral"}
+                    {qIndex + 1 < questions.length ? "Siguiente pregunta" : "Cerrar la mesa"}
                     <ArrowRight size={15} />
                   </button>
                 </div>
@@ -472,31 +619,76 @@ export default function OralExamPage() {
         </div>
       )}
 
-      {/* ── Resultado final ── */}
+      {/* ── Acta de examen ── */}
       {phase === "done" && (
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-8 text-center">
-          <div className={`mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl ${avg >= 6 ? "bg-emerald-500/10" : "bg-amber-500/10"}`}>
-            <GraduationCap className={avg >= 6 ? "text-emerald-400" : "text-amber-400"} size={30} />
+        <div className="space-y-5">
+          <div className={`overflow-hidden rounded-2xl border ${passed ? "border-emerald-500/30" : "border-red-500/30"} bg-white/[0.02]`}>
+            {/* Franja superior del acta */}
+            <div className={`px-6 py-3 text-center text-xs font-bold uppercase tracking-[0.25em] ${
+              passed ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"
+            }`}>
+              Acta de examen · {passed ? "Aprobado" : "Desaprobado"}
+            </div>
+
+            <div className="p-8 text-center">
+              <p className="text-sm text-gray-500">{doc.title}</p>
+              <div className="my-4">
+                <span className={`text-6xl font-bold ${passed ? "text-emerald-400" : "text-red-400"}`}>{avg}</span>
+                <span className="text-2xl text-gray-600">/10</span>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-gray-500">
+                <span>Mesa: {profMeta.name}</span>
+                <span>{results.length} {results.length === 1 ? "respuesta" : "respuestas"}</span>
+                <span>Duración: {mmss(MESA_SECONDS - secondsLeft)}</span>
+                <span>{new Date().toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}</span>
+              </div>
+              <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-gray-400">
+                {avg >= 8
+                  ? "Sobresaliente. Llegás a la mesa real con el tema dominado."
+                  : passed
+                  ? "Aprobado. Reforzá los puntos que el profesor te marcó y subís esa nota."
+                  : "Esta vez no alcanzó — para eso existe el simulacro. Repasá las devoluciones y volvé a rendir."}
+              </p>
+              {saving && (
+                <p className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-600">
+                  <Loader2 size={12} className="animate-spin" /> Guardando el acta…
+                </p>
+              )}
+              {savedActa && !saving && (
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-gray-600">
+                  <Check size={12} className="text-emerald-400" /> Acta guardada en tu historial
+                </p>
+              )}
+            </div>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight">Oral terminado</h2>
-          <p className="mt-2 text-sm text-gray-400">Tu promedio en la mesa</p>
-          <div className="my-4">
-            <span className={`text-5xl font-bold ${avg >= 6 ? "text-emerald-400" : "text-amber-400"}`}>{avg}</span>
-            <span className="text-2xl text-gray-600">/10</span>
-          </div>
-          <p className="mx-auto max-w-md text-sm leading-relaxed text-gray-400">
-            {avg >= 8
-              ? "Excelente. Manejás el tema con soltura para rendir."
-              : avg >= 6
-              ? "Bien encaminado. Reforzá los puntos donde el profesor te marcó omisiones."
-              : "Todavía hay lagunas. Repasá el material y volvé a intentarlo — para eso es el simulacro."}
-          </p>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
+
+          {/* Desglose por pregunta */}
+          {results.length > 0 && (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-5">
+              <p className="mb-3 text-sm font-semibold">Desglose de la mesa</p>
+              <div className="space-y-3">
+                {results.map((r, i) => (
+                  <div key={i} className="rounded-xl border border-white/8 bg-white/[0.015] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium leading-snug">
+                        {r.is_follow_up && <span className="mr-1.5 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-gray-400">REPREGUNTA</span>}
+                        {r.question}
+                      </p>
+                      <span className="shrink-0"><ScoreBadge score={r.score} /></span>
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-gray-500">{r.feedback}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap justify-center gap-3">
             <button
-              onClick={startSession}
+              onClick={() => setPhase("intro")}
               className="rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-violet-500"
             >
-              Otra mesa
+              Rendir otra mesa
             </button>
             <Link
               href="/progreso"

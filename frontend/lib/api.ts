@@ -343,6 +343,7 @@ export async function evaluateAnswer(
   question: string,
   studentAnswer: string,
   expectedAnswer?: string,
+  professor?: string,
 ): Promise<AnswerEvaluation> {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/exam/${docId}/evaluate`, {
@@ -352,6 +353,7 @@ export async function evaluateAnswer(
       question,
       student_answer: studentAnswer,
       expected_answer: expectedAnswer ?? "",
+      professor: professor ?? "clasico",
     }),
   });
   if (!res.ok) {
@@ -779,5 +781,51 @@ export async function getGroupPulse(groupId: string): Promise<GroupPulse> {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/groups/${groupId}/pulse`, { headers });
   if (!res.ok) throw new Error("Error cargando la actividad del grupo");
+  return res.json();
+}
+
+// ─── Mesa de Final (historial de orales) ──────────────────────────────────────
+
+export interface OralResultItem {
+  question: string;
+  transcript: string;
+  score: number;
+  feedback: string;
+  is_follow_up: boolean;
+}
+
+export interface OralSessionSummary {
+  id: string;
+  professor: string;
+  avg_score: number;
+  passed: boolean;
+  questions_count: number;
+  duration_seconds: number;
+  created_at: string;
+}
+
+export async function saveOralSession(
+  docId: string,
+  professor: string,
+  durationSeconds: number,
+  results: OralResultItem[],
+): Promise<{ id: string; avg_score: number; passed: boolean; created_at: string }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/exam/${docId}/oral/sessions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ professor, duration_seconds: durationSeconds, results }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo guardar la mesa");
+  }
+  return res.json();
+}
+
+export async function listOralSessions(docId: string): Promise<OralSessionSummary[]> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/exam/${docId}/oral/sessions`, { headers });
+  if (!res.ok) throw new Error("Error cargando el historial de mesas");
   return res.json();
 }

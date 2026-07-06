@@ -26,6 +26,7 @@ class EvaluateRequest(BaseModel):
     question: str
     student_answer: str
     expected_answer: str = ""   # vacío para preguntas de seguimiento
+    professor: str = "clasico"  # clasico | exigente | tribunal
 
 
 @router.post("/{doc_id}/evaluate", response_model=AnswerEvaluation)
@@ -45,6 +46,7 @@ async def evaluate_exam_answer(
             question=body.question,
             student_answer=body.student_answer,
             expected_answer=body.expected_answer,
+            professor=body.professor,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error evaluando la respuesta: {str(e)}")
@@ -83,3 +85,83 @@ async def transcribe_oral_answer(
         raise HTTPException(status_code=422, detail="No se entendió la respuesta. Probá hablar más fuerte y claro.")
 
     return TranscriptResponse(transcript=transcript)
+
+
+# ── Mesa de Final: historial de mesas orales ───────────────────────────────────
+
+class OralResultItem(BaseModel):
+    question: str
+    transcript: str
+    score: int
+    feedback: str
+    is_follow_up: bool = False
+
+
+class SaveOralSessionRequest(BaseModel):
+    professor: str = "clasico"
+    duration_seconds: int = 0
+    results: list[OralResultItem]
+
+
+PASS_SCORE = 4  # en la mesa argentina, 4 aprueba
+
+
+@router.post("/{doc_id}/oral/sessions")
+async def save_oral_session(
+    doc_id: str,
+    body: SaveOralSessionRequest,
+    current_user=Depends(get_current_user),
+):
+    """Guarda una mesa oral terminada (acta) en el historial."""
+    _assert_owns_document(doc_id, current_user.id)
+    if not body.results:
+        raise HTTPException(status_code=400, detail="La mesa no tiene respuestas.")
+
+    doc = (
+        supabase.table("documents")
+        .select("title")
+        .eq("id", doc_id)
+        .maybe_single()
+        .execute()
+    )
+    title = doc.data["title"] if doc and doc.data else None
+
+    avg = round(sum(r.score for r in body.results) / len(body.results), 1)
+    row = {
+        "user_id": current_user.id,
+        "doc_id": doc_id,
+        "doc_title": title,
+        "professor": body.professor,
+        "avg_score": avg,
+        "passed": avg >= PASS_SCORE,
+        "questions_count": len(body.results),
+        "duration_seconds": max(0, body.duration_seconds),
+        "results": [r.model_dump() for r in body.results],
+    }
+    resp = supabase.table("oral_sessions").insert(row).execute()
+    saved = resp.data[0]
+    return {
+        "id": saved["id"],
+        "avg_score": float(saved["avg_score"]),
+        "passed": saved["passed"],
+        "created_at": saved["created_at"],
+    }
+
+
+@router.get("/{doc_id}/oral/sessions")
+async def list_oral_sessions(doc_id: str, current_user=Depends(get_current_user)):
+    """Historial de mesas orales del documento (más recientes primero)."""
+    _assert_owns_document(doc_id, current_user.id)
+    resp = (
+        supabase.table("oral_sessions")
+        .select("id, professor, avg_score, passed, questions_count, duration_seconds, created_at")
+        .eq("user_id", current_user.id)
+        .eq("doc_id", doc_id)
+        .order("created_at", desc=True)
+        .limit(20)
+        .execute()
+    )
+    return [
+        {**s, "avg_score": float(s["avg_score"])}
+        for s in (resp.data or [])
+    ]

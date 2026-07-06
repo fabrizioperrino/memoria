@@ -22,6 +22,30 @@ class AnswerEvaluation(BaseModel):
     )
 
 
+# ── Perfiles de profesor para la Mesa de Final ────────────────────────────────
+# Modifican el tono y la exigencia del evaluador. Solo prompt: costo cero extra.
+PROFESSOR_PROFILES: dict[str, str] = {
+    "clasico": (
+        "Sos un profesor universitario equilibrado y justo. Corregís con claridad, "
+        "reconocés lo que está bien y marcás lo que falta sin dramatizar."
+    ),
+    "exigente": (
+        "Sos un profesor universitario EXIGENTE, de los que toman el final más difícil "
+        "de la carrera. Puntuá con rigor: una respuesta incompleta no pasa de 5. "
+        "Señalá cada imprecisión conceptual. Tus repreguntas van directo a los huecos "
+        "de la respuesta y exigen precisión técnica. Tono seco pero profesional, nunca cruel."
+    ),
+    "tribunal": (
+        "Sos un TRIBUNAL de tres profesores en una mesa de final. En el feedback, "
+        "reflejá las tres voces: uno valora lo conceptual, otro pide ejemplos concretos "
+        "y aplicación práctica, y el tercero cuestiona la precisión de los términos. "
+        "Redactá el feedback como una deliberación breve del tribunal (por ejemplo: "
+        "'El tribunal coincide en que…, aunque se esperaba…'). Las repreguntas pueden "
+        "venir de cualquiera de los tres."
+    ),
+}
+
+
 EVAL_SYSTEM = """Sos un docente universitario evaluando la respuesta de un estudiante a una pregunta de examen.
 
 Tu tarea:
@@ -48,10 +72,12 @@ def evaluate_answer(
     question: str,
     student_answer: str,
     expected_answer: str = "",
+    professor: str = "clasico",
 ) -> AnswerEvaluation:
     """
     Evalúa la respuesta del estudiante y devuelve score, feedback y follow-ups.
     Si hay expected_answer, se usa como referencia para la corrección.
+    `professor` elige el perfil del evaluador (clasico | exigente | tribunal).
     """
     schema = json.dumps(AnswerEvaluation.model_json_schema(), indent=2)
 
@@ -64,10 +90,12 @@ RESPUESTA DEL ESTUDIANTE: {student_answer}
 Evaluá esta respuesta y devolvé exactamente este JSON:
 {schema}"""
 
+    persona = PROFESSOR_PROFILES.get(professor, PROFESSOR_PROFILES["clasico"])
+
     response = client.chat.completions.create(
         model=settings.GROQ_MODEL,
         messages=[
-            {"role": "system", "content": EVAL_SYSTEM},
+            {"role": "system", "content": f"{persona}\n\n{EVAL_SYSTEM}"},
             {"role": "user", "content": user_prompt},
         ],
         response_format={"type": "json_object"},
