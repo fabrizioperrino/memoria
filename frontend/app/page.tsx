@@ -503,7 +503,7 @@ function Dashboard() {
                         }
                       </div>
 
-                      <div className="flex-1 min-w-0">
+                      <Link href={`/study/${doc.id}`} className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium truncate text-sm sm:text-base">{doc.title}</p>
                           {doc.status === "processing" && (
@@ -539,20 +539,15 @@ function Dashboard() {
                           <span className="text-xs text-gray-600">•</span>
                           <span className="text-xs text-gray-500">{doc.key_concepts?.length || 0} conceptos</span>
                         </div>
-                      </div>
+                      </Link>
 
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Acciones — solo desktop, reveladas en hover */}
+                      <div className="hidden lg:flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Link
                           href={`/quiz/${doc.id}`}
                           className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all flex items-center gap-1"
                         >
                           <Target size={11} /> Quiz
-                        </Link>
-                        <Link
-                          href={`/chat/${doc.id}`}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all flex items-center gap-1"
-                        >
-                          <MessageSquare size={11} /> Chat
                         </Link>
                         <Link
                           href={`/review/${doc.id}`}
@@ -580,8 +575,8 @@ function Dashboard() {
                         </button>
                       </div>
 
-                      <Link href={`/study/${doc.id}`} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ChevronRight className="text-gray-500" size={18} />
+                      <Link href={`/study/${doc.id}`} className="shrink-0 text-gray-600 group-hover:text-gray-400 transition-colors" aria-label="Abrir">
+                        <ChevronRight size={18} />
                       </Link>
                     </div>
                   ))}

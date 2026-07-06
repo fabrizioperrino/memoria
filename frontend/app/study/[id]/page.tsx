@@ -114,48 +114,48 @@ export default function StudyPage() {
       <div className="max-w-4xl mx-auto px-6 py-10">
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors mb-3">
-              <ArrowLeft size={14} /> Volver
-            </Link>
-            <h1 className="text-2xl font-bold">{doc.title}</h1>
-          </div>
+        <div className="mb-8">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition-colors mb-3">
+            <ArrowLeft size={14} /> Volver
+          </Link>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-5">{doc.title}</h1>
+
+          {/* Acciones */}
           <div className="flex flex-wrap gap-2">
             <Link
-              href={`/chat/${id}`}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all"
+              href={`/review/${id}`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20 active:scale-[0.98]"
             >
-              <MessageSquare size={15} /> Chat
+              <RotateCcw size={15} /> Repasar
             </Link>
             <Link
               href={`/quiz/${id}`}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all active:scale-[0.98]"
             >
               <Target size={15} /> Quiz
             </Link>
             <Link
-              href={`/exam/${id}`}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all"
-            >
-              <Brain size={15} /> Examen IA
-            </Link>
-            <Link
               href={`/oral/${id}`}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all active:scale-[0.98]"
               title="Simulacro de final oral: respondé hablando"
             >
               <GraduationCap size={15} /> Oral
             </Link>
             <Link
-              href={`/review/${id}`}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
+              href={`/exam/${id}`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all active:scale-[0.98]"
             >
-              <RotateCcw size={15} /> Repasar
+              <Brain size={15} /> Examen IA
+            </Link>
+            <Link
+              href={`/chat/${id}`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-all active:scale-[0.98]"
+            >
+              <MessageSquare size={15} /> Chat
             </Link>
             <Link
               href={`/cram/${id}`}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/25 text-red-300 hover:bg-red-500/20 text-sm font-medium transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/25 text-red-300 hover:bg-red-500/20 text-sm font-medium transition-all active:scale-[0.98]"
               title="Repaso intensivo de última hora: lo que más te cuesta"
             >
               <Siren size={15} /> Rindo mañana

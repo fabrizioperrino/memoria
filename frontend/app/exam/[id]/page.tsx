@@ -40,16 +40,18 @@ function FollowUpBlock({
   const [answer, setAnswer] = useState("");
   const [evaluation, setEvaluation] = useState<AnswerEvaluation | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleEvaluate() {
     if (!answer.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       const ev = await evaluateAnswer(docId, question, answer);
       setEvaluation(ev);
       onDone(answer, ev);
-    } catch {
-      // silently ignore follow-up errors
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo evaluar. Probá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -70,16 +72,19 @@ function FollowUpBlock({
             disabled={loading}
             className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-sm placeholder-gray-600 focus:outline-none focus:border-violet-500/60 transition-all resize-none disabled:opacity-50"
           />
-          <button
-            onClick={handleEvaluate}
-            disabled={!answer.trim() || loading}
-            className="mt-2 px-4 py-2 rounded-lg bg-violet-600/80 hover:bg-violet-600 text-sm font-medium transition-all disabled:opacity-40 flex items-center gap-2"
-          >
-            {loading
-              ? <><div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Evaluando...</>
-              : "Evaluar"
-            }
-          </button>
+          <div className="mt-2 flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleEvaluate}
+              disabled={!answer.trim() || loading}
+              className="px-4 py-2 rounded-lg bg-violet-600/80 hover:bg-violet-600 text-sm font-medium transition-all disabled:opacity-40 flex items-center gap-2"
+            >
+              {loading
+                ? <><div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Evaluando...</>
+                : error ? "Reintentar" : "Evaluar"
+              }
+            </button>
+            {error && <span className="text-xs text-red-400">{error}</span>}
+          </div>
         </>
       ) : (
         <div className="space-y-2">
